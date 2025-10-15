@@ -22,7 +22,7 @@ connectDB();
 app.use(cors({
     credentials: true,
     // origin: ['http://localhost:5173', 'https://pos-final-green.vercel.app']   
-    origin: ['http://localhost:5173','https://pos-front-love.onrender.com','https://savourybites-pos.hasnova.com']   
+    origin: ['http://localhost:5173','https://pos-frontend-bahrain.onrender.com']   
     // origin:  process.env.FRONTEND_URL   
 }))
 app.use(express.json()); //parse incoming request in json format
