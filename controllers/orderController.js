@@ -409,6 +409,61 @@ const updateOrderStatus = async (req, res, next) => {
 };
 
 
+// const updateSectionItemsReady = async (req, res, next) => {
+//   try {
+//     const { section } = req.body;
+//     const orderId = req.params.id;
+
+//     const order = await Order.findById(orderId);
+//     if (!order) return res.status(404).json({ message: "Order not found" });
+
+//     // 1️⃣ Update items for this section
+//     let sectionUpdated = false;
+//     order.items.forEach(item => {
+//       if (item.section?.toLowerCase() === section.toLowerCase()) {
+//         item.status = "Ready";
+//         sectionUpdated = true;
+//       }
+//     });
+
+//     if (!sectionUpdated) {
+//       return res.status(400).json({ message: `No items found for section: ${section}` });
+//     }
+
+//     // 2️⃣ Check if all items are ready
+//     const allReady = order.items.every(item => {
+//       if (!item.section) return true;
+//       return item.status === "Ready";
+//     });
+
+//     // 3️⃣ Update order status
+//     order.orderStatus = allReady ? "Ready" : "In Progress";
+
+//     await order.save();
+
+//     // 🟢 SOCKET.IO: Notify clients
+//     const io = req.app.get("socketio");
+//     if (io) {
+//       io.emit("orderUpdate", {
+//         action: "items_ready",
+//         orderId: orderId,
+//         section: section,
+//         newStatus: order.orderStatus,
+//         data: order,
+//       });
+//     }
+
+//     res.status(200).json({
+//       message: `✅ All ${section} items marked ready. Order status: ${order.orderStatus}`,
+//       data: order,
+//     });
+//   } catch (error) {
+//     console.error("❌ Error in updateSectionItemsReady:", error);
+//     next(error);
+//   }
+// };
+
+
 const updateSectionItemsReady = async (req, res, next) => {
   try {
     const { section } = req.body;
@@ -419,7 +474,7 @@ const updateSectionItemsReady = async (req, res, next) => {
 
     // 1️⃣ Update items for this section
     let sectionUpdated = false;
-    order.items.forEach(item => {
+    order.items.forEach((item) => {
       if (item.section?.toLowerCase() === section.toLowerCase()) {
         item.status = "Ready";
         sectionUpdated = true;
@@ -427,11 +482,13 @@ const updateSectionItemsReady = async (req, res, next) => {
     });
 
     if (!sectionUpdated) {
-      return res.status(400).json({ message: `No items found for section: ${section}` });
+      return res
+        .status(400)
+        .json({ message: `No items found for section: ${section}` });
     }
 
     // 2️⃣ Check if all items are ready
-    const allReady = order.items.every(item => {
+    const allReady = order.items.every((item) => {
       if (!item.section) return true;
       return item.status === "Ready";
     });
@@ -439,20 +496,27 @@ const updateSectionItemsReady = async (req, res, next) => {
     // 3️⃣ Update order status
     order.orderStatus = allReady ? "Ready" : "In Progress";
 
+    // ⚠️ Tell Mongoose we changed a nested array (important!)
+    order.markModified("items");
+
+    // 4️⃣ Save order
     await order.save();
 
-    // 🟢 SOCKET.IO: Notify clients
-    const io = req.app.get("socketio");
-    if (io) {
-      io.emit("orderUpdate", {
-        action: "items_ready",
-        orderId: orderId,
-        section: section,
-        newStatus: order.orderStatus,
-        data: order,
-      });
-    }
+    // 5️⃣ Wait a tiny bit before notifying (lets DB commit properly)
+    setTimeout(() => {
+      const io = req.app.get("socketio");
+      if (io) {
+        io.emit("orderUpdate", {
+          action: "items_ready",
+          orderId: orderId,
+          section: section,
+          newStatus: order.orderStatus,
+          data: order,
+        });
+      }
+    }, 300); // 300ms delay is enough
 
+    // 6️⃣ Respond to client
     res.status(200).json({
       message: `✅ All ${section} items marked ready. Order status: ${order.orderStatus}`,
       data: order,
@@ -462,8 +526,6 @@ const updateSectionItemsReady = async (req, res, next) => {
     next(error);
   }
 };
-
-
 
 
 
