@@ -249,81 +249,9 @@ const Order = require("../models/orderModel"); // Assumed updated model
 const DeliveryCustomer = require("../models/deliveryCustomerModel"); // New import
 const DeliveryBoy = require("../models/DeliveryBoyModel"); // MUST be imported for validation
 const { default: mongoose } = require("mongoose");
+const bcrypt = require("bcrypt");
+const User = require("../models/userModel"); // assuming your users are stored here
 
-// // Helper to check for valid ID
-// const isValidId = (id, entity) => {
-//     // IMPROVEMENT: Use 400 for bad format, not 404 for not found
-//     if (!mongoose.Types.ObjectId.isValid(id)) {
-//         throw createHttpError(400, `Invalid ${entity} ID format!`);
-//     }
-// };
-
-// ---------------------------------------------------------------------
-// Core: Add New Order (Updated for Delivery Logic & Schema Alignment)
-// ---------------------------------------------------------------------
-// const addOrder = async (req, res, next) => {
-//     try {
-//         const orderData = req.body;
-        
-//         // --- 1. Align payload variables to schema paths ---
-//         // Assuming customer details are nested in the incoming payload for now.
-//         // NOTE: The request structure should align with what is expected here.
-//         const { orderType } = orderData;
-//         const { phone, name } = orderData.customerDetails || {}; // Destructure nested details
-//         const { deliveryBoyId, deliveryAddress } = orderData; // These are top-level fields
-
-//         // 2. Handle Delivery Customer Record Persistence (Upsert Logic)
-//         if (orderType === 'Delivery') {
-            
-//             // --- CRITICAL BUSINESS VALIDATION ---
-//             if (!phone || !deliveryAddress || !deliveryBoyId) {
-//                 throw createHttpError(400, 'Delivery orders must specify phone, address, and an assigned Delivery Boy ID.');
-//             }
-//             isValidId(deliveryBoyId, 'DeliveryBoy');
-
-//             // Check if the assigned boy is active (Soft Delete Check)
-//             const boy = await DeliveryBoy.findById(deliveryBoyId);
-//             if (!boy || !boy.is_active) {
-//                 throw createHttpError(400, 'Assigned delivery boy is not active or does not exist.');
-//             }
-
-//             // --- Customer Upsert Logic (Uses snapshot data for update) ---
-//             // CORRECTION: Removed 'isArchived: false' as it is not in the DeliveryCustomerModel schema.
-//             await DeliveryCustomer.findOneAndUpdate(
-//                 { phone_number: phone.trim() },
-//                 {
-//                     $set: {
-//                         name: name || 'N/A', // Use the snapshot name
-//                         address: deliveryAddress, // Use the snapshot address as the customer's new default
-//                     }
-//                 },
-//                 { upsert: true, new: true, runValidators: true }
-//             );
-
-//             // Set a default status for new deliveries
-//             if (!orderData.orderStatus) {
-//                 orderData.orderStatus = 'In Progress';
-//             }
-//         }
-
-//         const order = new Order(orderData);
-//         await order.save();
-
-//         // 🟢 SOCKET.IO: Emit new order to all connected clients
-//         const io = req.app.get("socketio");
-//         if (io) {
-//              io.emit("orderUpdate", { action: "new_order", data: order }); 
-//         }
-
-//         res.status(201).json({ success: true, message: "Order Created!", data: order });
-//     } catch (error) {
-//         // Handle unique constraint violation for orderId (error.code 11000)
-//         if (error.code && error.code === 11000) {
-//             return next(createHttpError(400, "Order ID must be unique."));
-//         }
-//         next(error);
-//     }
-// };
 
 const addOrder = async (req, res, next) => {
     try {
@@ -439,43 +367,6 @@ const updateOrder = async (req, res, next) => {
     }
 };
 
-// ---------------------------------------------------------------------
-// Update Order Status
-// ---------------------------------------------------------------------
-// const updateOrderStatus = async (req, res, next) => {
-//     try {
-//         const { orderStatus } = req.body;
-//         const { id } = req.params;
-
-//         isValidId(id, 'Order');
-
-//         const order = await Order.findByIdAndUpdate(
-//             id,
-//             { orderStatus },
-//             { new: true }
-//         );
-
-//         if (!order) {
-//             const error = createHttpError(404, "Order not found!");
-//             return next(error);
-//         }
-        
-//         // 🟢 SOCKET.IO: Emit general status update
-//         const io = req.app.get("socketio");
-//         if (io) {
-//             io.emit("orderUpdate", { 
-//                 action: "status_changed", 
-//                 orderId: id,
-//                 newStatus: orderStatus,
-//                 data: order
-//             });
-//         }
-
-//         res.status(200).json({ success: true, message: "Order updated!", data: order });
-//     } catch (error) {
-//         next(error);
-//     }
-// };
 
 
 const updateOrderStatus = async (req, res, next) => {
@@ -517,111 +408,6 @@ const updateOrderStatus = async (req, res, next) => {
     }
 };
 
-// ---------------------------------------------------------------------
-// Update Section Items Ready
-// ---------------------------------------------------------------------
-// const updateSectionItemsReady = async (req, res, next) => {
-//     try {
-//         console.log("🟢 Incoming updateSectionItemsReady:", { id: req.params.id, body: req.body });
-//         const { section } = req.body; // e.g. "kitchen" or "grill"
-//         const orderId = req.params.id;
-
-//         isValidId(orderId, 'Order');
-
-//         const order = await Order.findById(orderId);
-//         if (!order) return res.status(404).json({ message: "Order not found" });
-
-//         // 1️⃣ Mark items from this specific section as ready
-//         order.items = order.items.map(item =>
-//             item.section?.toLowerCase() === section.toLowerCase()
-//                 ? { ...item, status: "Ready" }
-//                 : item
-//         );
-
-//         const allReady = order.items.every(item => {
-//             if (!item.section) {
-//                 return true;
-//             }
-//             return item.status === "Ready";
-//         });
-
-//         // 3️⃣ Set the main order status
-//         order.orderStatus = allReady ? "Ready" : "In Progress";
-
-//         await order.save();
-
-//         // 🟢 SOCKET.IO: Emit updated order status
-//         const io = req.app.get("socketio");
-//         if (io) {
-//             io.emit("orderUpdate", { 
-//                 action: "items_ready", 
-//                 orderId: orderId,
-//                 section: section,
-//                 newStatus: order.orderStatus,
-//                 data: order 
-//             });
-//         }
-
-//         res.status(200).json({
-//             message: `All ${section} items marked ready. Order status: ${order.orderStatus}`,
-//             data: order,
-//         });
-//     } catch (error) {
-//         next(error);
-//     }
-// };
-
-
-// const updateSectionItemsReady = async (req, res, next) => {
-//     try {
-//         console.log("🟢 Incoming updateSectionItemsReady:", {  body: req.body });
-//         const { section } = req.body; // e.g. "kitchen" or "grill"
-//         const orderId = req.params.id;
-
-//         const order = await Order.findById(orderId);
-//         if (!order) return res.status(404).json({ message: "Order not found" });
-
-//         // 1️⃣ Mark items from this specific section as ready
-//         order.items = order.items.map(item =>
-//             item.section?.toLowerCase() === section.toLowerCase()
-//                 ? { ...item, status: "Ready" }
-//                 : item
-//         );
-
-//         const allReady = order.items.every(item => {
-//             // Check if the item has no section (like drinks, pre-packaged goods). If so, it's 'Ready'.
-//             if (!item.section) {
-//                 return true;
-//             }
-//             // Otherwise, check if the item that needs preparation has been marked "Ready".
-//             return item.status === "Ready";
-//         });
-
-//         // 3️⃣ Set the main order status
-//         order.orderStatus = allReady ? "Ready" : "In Progress";
-
-//         await order.save();
-
-//         // 🟢 SOCKET.IO: Emit updated order status
-//         const io = req.app.get("socketio");
-//         if (io) {
-//             io.emit("orderUpdate", { 
-//                 action: "items_ready", 
-//                 orderId: orderId,
-//                 section: section,
-//                 newStatus: order.orderStatus,
-//                 data: order // Optional: send full order data
-//             });
-//         }
-
-//         res.status(200).json({
-//             message: `All ${section} items marked ready. Order status: ${order.orderStatus}`,
-//             data: order,
-//         });
-//     } catch (error) {
-//         next(error);
-//     }
-// };
 
 const updateSectionItemsReady = async (req, res, next) => {
   try {
@@ -677,103 +463,6 @@ const updateSectionItemsReady = async (req, res, next) => {
   }
 };
 
-// ---------------------------------------------------------------------
-// Update Order (Delivery Boy Reassignment - FIXED FIELD NAME & Logic)
-// ---------------------------------------------------------------------
-// const updateOrder = async (req, res, next) => {
-//     try {
-//         const { orderId } = req.params; // Captures the ID from /by-order-id/:orderId
-//         const updateData = req.body;
-//         let updatedOrder = null;
-//         let queryCondition = null;
-//         let action = "order_modified";
-
-//         // 1. DETERMINE QUERY TYPE: Mongoose ID vs. Custom ID
-        
-//         // If the update contains a deliveryBoyId, we MUST query by Mongoose _id, 
-//         // and we MUST run the delivery boy validation logic.
-//         if (updateData.deliveryBoyId) { 
-//             // We assume the user sends the Mongoose _id in the :orderId parameter for this feature.
-//             isValidId(orderId, 'Order');
-//             queryCondition = { _id: orderId };
-
-//             const order = await Order.findById(orderId);
-//             if (!order) throw createHttpError(404, "Order not found");
-
-//             // Enforce Delivery Boy Reassignment Rule
-//             if (order.orderStatus !== "In Progress" && order.orderStatus !== "Ready") {
-//                 return res.status(403).json({ 
-//                     success: false, 
-//                     message: `Cannot re-assign delivery boy when order is ${order.orderStatus}. Only allowed in 'In Progress' or 'Ready' status.` 
-//                 });
-//             }
-            
-//             // Validate new Delivery Boy ID and active status
-//             isValidId(updateData.deliveryBoyId, 'DeliveryBoy');
-//             const newBoy = await DeliveryBoy.findById(updateData.deliveryBoyId);
-//             if (!newBoy || !newBoy.is_active) {
-//                 return res.status(400).json({ success: false, message: 'New assigned delivery boy is not active.' });
-//             }
-            
-//             // Set the update object for reassignment
-//             const updateFields = { 
-//                 deliveryBoyId: updateData.deliveryBoyId, 
-//                 ...(updateData.orderStatus && { orderStatus: updateData.orderStatus }) 
-//             };
-            
-//             // Execute Reassignment Update
-//             updatedOrder = await Order.findByIdAndUpdate(
-//                 orderId,
-//                 updateFields,
-//                 { new: true, runValidators: true }
-//             ).populate("deliveryBoyId", "name phone"); 
-            
-//             action = "delivery_boy_changed";
-            
-//         } else {
-//             // 2. FALLBACK TO GENERAL ITEM/FIELD UPDATE (Using Custom ID Query)
-            
-//             // Re-introduce original validation for items array
-//             if (!updateData.items || !Array.isArray(updateData.items)) {
-//                 throw createHttpError(400, "Items array is required for general order modifications.");
-//             }
-
-//             // Use the original custom query condition
-//             queryCondition = { 'orderId.orderId': orderId };
-            
-//             // Execute General Update
-//             updatedOrder = await Order.findOneAndUpdate(
-//                 queryCondition,
-//                 { $set: updateData },
-//                 { new: true, runValidators: true }
-//             ).populate("deliveryBoyId", "name phone");
-            
-//             action = "order_modified";
-//         }
-
-
-//         // 3. POST-UPDATE CHECK
-//         if (!updatedOrder) {
-//             throw createHttpError(404, "Order not found or custom ID is invalid!");
-//         }
-        
-//         // 4. SOCKET.IO: Emit order modification
-//         const io = req.app.get("socketio");
-//         if (io) {
-//             io.emit("orderUpdate", { 
-//                 action: action, 
-//                 orderId: updatedOrder._id,
-//                 data: updatedOrder
-//             });
-//         }
-
-//         res.status(200).json({ success: true, data: updatedOrder, message: action === "delivery_boy_changed" ? "Delivery Boy Reassigned!" : "Order updated!" });
-//     } catch (error) {
-//         console.error('Update error:', error);
-//         // Include specific Mongoose validation errors if available
-//         next(createHttpError(400, error.message));
-//     }
-// };
 
 
 
@@ -807,41 +496,133 @@ const updateSectionItemsReady = async (req, res, next) => {
 //     }
 // };
 
-const deleteOrder = async (req, res, next) => {
-    try {
-        const { id } = req.params;
+// const deleteOrder = async (req, res, next) => {
+//     try {
+//         const { id } = req.params;
 
-        // Validate the ID
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            const error = createHttpError(404, "Invalid id!");
-            return next(error);
-        }
+//         // Validate the ID
+//         if (!mongoose.Types.ObjectId.isValid(id)) {
+//             const error = createHttpError(404, "Invalid id!");
+//             return next(error);
+//         }
 
-        // Find and delete the order
-        const order = await Order.findByIdAndDelete(id);
+//         // Find and delete the order
+//         const order = await Order.findByIdAndDelete(id);
 
-        // If order not found
-        if (!order) {
-            const error = createHttpError(404, "Order not found!");
-            return next(error);
-        }
+//         // If order not found
+//         if (!order) {
+//             const error = createHttpError(404, "Order not found!");
+//             return next(error);
+//         }
         
-        // 🟢 SOCKET.IO: Emit order deletion
-        const io = req.app.get("socketio");
-        if (io) {
-            io.emit("orderUpdate", { 
-                action: "order_deleted", 
-                orderId: id 
-            });
-        }
+//         // 🟢 SOCKET.IO: Emit order deletion
+//         const io = req.app.get("socketio");
+//         if (io) {
+//             io.emit("orderUpdate", { 
+//                 action: "order_deleted", 
+//                 orderId: id 
+//             });
+//         }
 
 
-        // Success response
-        res.status(200).json({ success: true, message: "Order deleted successfully!" });
-    } catch (error) {
-        next(error);
+//         // Success response
+//         res.status(200).json({ success: true, message: "Order deleted successfully!" });
+//     } catch (error) {
+//         next(error);
+//     }
+// };
+
+//  settign up password for the nonadmin users
+
+
+
+// DELETE ORDER CONTROLLER
+const deleteOrder = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { password } = req.body;
+    const user = req.user;
+
+    console.log("🧩 DELETE ORDER DEBUG START 🧩");
+    console.log("Order ID:", id);
+    console.log("User:", user);
+    console.log("Password received:", password ? "✅ yes" : "❌ no");
+
+    // 🔹 Validate order ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      console.log("❌ Invalid order ID");
+      return next(createHttpError(400, "Invalid order ID."));
     }
+
+    // 🔹 Check if order exists
+    const order = await Order.findById(id);
+    if (!order) {
+      console.log("❌ Order not found");
+      return next(createHttpError(404, "Order not found."));
+    }
+
+    // 🔹 Normalize user role
+    const userRole = user.role?.toLowerCase?.();
+    console.log("User Role Normalized:", userRole);
+
+    // 🔹 ADMIN — direct delete
+    if (userRole === "admin") {
+      console.log("🟢 Admin detected — deleting directly");
+
+      await Order.findByIdAndDelete(id);
+      const io = req.app.get("socketio");
+      if (io) io.emit("orderUpdate", { action: "order_deleted", orderId: id });
+
+      return res.json({ success: true, message: "Order deleted by admin." });
+    }
+
+    // 🔹 NON-ADMIN — must verify password
+    console.log("🟡 Non-admin detected — verifying password...");
+
+    if (!password) {
+      console.log("❌ No password provided");
+      return next(createHttpError(400, "Admin password required."));
+    }
+
+    // 🔹 Find admin user
+    const adminUser = await User.findOne({ role: { $regex: /^admin$/i } });
+    console.log("Admin found:", adminUser?.email || "❌ none");
+
+    if (!adminUser) {
+      console.log("❌ No admin user found in DB");
+      return next(createHttpError(404, "Admin account not found."));
+    }
+
+    // 🔹 Compare password
+    const isValidPassword = await bcrypt.compare(password, adminUser.password);
+    console.log("Password valid:", isValidPassword);
+
+    // 🚫 Wrong password → stop immediately
+    if (!isValidPassword) {
+      console.log("❌ WRONG PASSWORD — stopping here!");
+      return next(createHttpError(401, "Invalid admin password."));
+    }
+
+    // ✅ Safe delete path (only if admin OR password verified)
+    console.log("✅ Password verified — deleting order now...");
+    await Order.findByIdAndDelete(id);
+
+    const io = req.app.get("socketio");
+    if (io) io.emit("orderUpdate", { action: "order_deleted", orderId: id });
+
+    console.log("🟢 Order deleted successfully");
+
+    return res.status(200).json({
+      success: true,
+      message: "Order deleted after admin password verification.",
+    });
+  } catch (error) {
+    console.log("❌ ERROR in deleteOrder:", error);
+    next(error);
+  }
 };
+
+
 
 // PATCH: Assign or change the delivery boy for an order
 const assignDeliveryBoyToOrder = async (req, res, next) => {
