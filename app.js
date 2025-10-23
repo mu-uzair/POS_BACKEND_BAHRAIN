@@ -132,8 +132,8 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: [
-      "https://pos-frontend-bahrain.onrender.com","http://localhost:5173"
-      
+      "http://localhost:5173",
+      "https://pos-frontend-bahrain.onrender.com"
     ],
     methods: ["GET", "POST", "PUT"],
   }
