@@ -165,15 +165,7 @@ const VariationSchema = new mongoose.Schema({
         required: [true, 'Variation name is required.'],
         trim: true
     },
-    // price: { 
-    //     type: Number, 
-    //     required: [true, 'Variation price is required.'],
-    //     min: [0, 'Price cannot be negative.'],
-    //     validate: {
-    //         validator: Number.isInteger,
-    //         message: 'Price must be an integer (smallest currency unit).'
-    //     }
-    // }, 
+
     price: {
     type: mongoose.Schema.Types.Decimal128,
     required: [true, 'Variation price is required.'],

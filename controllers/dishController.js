@@ -519,33 +519,6 @@ const { Decimal128 } = require("mongodb");
 const createHttpError = require("http-errors");
 const Dishes = require("../models/dishesModel");
 
-// ----------------------------------------------------
-// Helper function to check for valid variations array
-// ----------------------------------------------------
-// const validateVariations = (variations) => {
-//     if (!Array.isArray(variations) || variations.length === 0) {
-//         return "Variations must be a non-empty array.";
-//     }
-
-//     const defaultCount = variations.filter(v => v.isDefault).length;
-//     if (defaultCount === 0) {
-//         return "You must set exactly one variation as the default price.";
-//     }
-//     if (defaultCount > 1) {
-//         return "Only one variation can be set as the default price.";
-//     }
-
-//     for (const v of variations) {
-//         if (!v.name || typeof v.name !== 'string' || v.name.trim() === '') {
-//             return "All variations must have a name.";
-//         }
-//         if (typeof v.price !== 'number' || v.price < 0 || isNaN(v.price) || !Number.isInteger(v.price)) {
-//             return "All variation prices must be valid non-negative integers (in smallest currency unit).";
-//         }
-//     }
-//     return null;
-// };
-
 
 const validateVariations = (variations) => {
     console.log("Validating variations:", variations);
@@ -654,13 +627,7 @@ const addDish = async (req, res, next) => {
             price: mongoose.Types.Decimal128.fromString(parseFloat(v.price).toFixed(3))
         }));
 
-        // // 3️⃣ Create and save
-        // const newDish = new Dishes({
-        //     dishName,
-        //     variations,
-        //     category,
-        //     section: section || null, // optional
-        // });
+     
 
         const newDish = new Dishes({
             dishName,
@@ -683,25 +650,7 @@ const addDish = async (req, res, next) => {
     }
 };
 
-// ----------------------------------------------------
-// GET DISHES BY CATEGORY
-// ----------------------------------------------------
-// const getDishesByCategory = async (req, res, next) => {
-//     try {
-//         const { categoryId } = req.params;
 
-//         if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-//             const error = createHttpError(400, "Invalid Category ID!");
-//             return next(error);
-//         }
-
-//         const dishes = await Dishes.find({ category: categoryId });
-//         res.status(200).json({ success: true, data: dishes });
-//     } catch (error) {
-//         console.error("Error fetching dishes:", error);
-//         return next(error);
-//     }
-// };
 
 const getDishesByCategory = async (req, res, next) => {
     try {
@@ -742,23 +691,6 @@ const getDishesByCategory = async (req, res, next) => {
 
 
 
-// ----------------------------------------------------
-// GET ALL DISHES
-// ----------------------------------------------------
-// const getDishes = async (req, res, next) => {
-//     try {
-//         const dishes = await Dishes.find();
-//         if (!dishes || dishes.length === 0) {
-//             const error = createHttpError(404, "No dishes found!");
-//             return next(error);
-//         }
-
-//         res.status(200).json({ success: true, data: dishes });
-//     } catch (error) {
-//         console.error("Error fetching dishes:", error);
-//         return next(error);
-//     }
-// };
 
 const getDishes = async (req, res, next) => {
     try {
@@ -793,68 +725,7 @@ const getDishes = async (req, res, next) => {
 
 
 
-// ----------------------------------------------------
-// UPDATE DISH CONTROLLER
-// ----------------------------------------------------
-// const updateDish = async (req, res, next) => {
-//     try {
-//         const { dishId } = req.params;
-//         const { dishName, variations, category, section } = req.body;
 
-//         console.log("Request Body:", req.body);
-
-//         if (!mongoose.Types.ObjectId.isValid(dishId)) {
-//             const error = createHttpError(400, "Invalid Dish ID!");
-//             return next(error);
-//         }
-
-//         if (!dishName && !variations && !category && section === undefined) {
-//             const error = createHttpError(400, "Please provide at least one field to update!");
-//             return next(error);
-//         }
-
-//         if (category && !mongoose.Types.ObjectId.isValid(category)) {
-//             const error = createHttpError(400, "Invalid Category ID!");
-//             return next(error);
-//         }
-
-//         if (variations) {
-//             const variationError = validateVariations(variations);
-//             if (variationError) {
-//                 const error = createHttpError(400, variationError);
-//                 return next(error);
-//             }
-//         }
-
-//         const sectionError = validateSection(section);
-//         if (sectionError) {
-//             const error = createHttpError(400, sectionError);
-//             return next(error);
-//         }
-
-//         const dishToUpdate = await Dishes.findById(dishId);
-//         if (!dishToUpdate) {
-//             const error = createHttpError(404, "Dish not found!");
-//             return next(error);
-//         }
-
-//         if (dishName) dishToUpdate.dishName = dishName;
-//         if (variations) dishToUpdate.variations = variations;
-//         if (category) dishToUpdate.category = category;
-//         if (section !== undefined) dishToUpdate.section = section || null;
-
-//         await dishToUpdate.save();
-
-//         res.status(200).json({
-//             success: true,
-//             message: "Dish updated successfully!",
-//             data: dishToUpdate,
-//         });
-//     } catch (error) {
-//         console.error("Error updating dish:", error);
-//         return next(error);
-//     }
-// };
 
 const updateDish = async (req, res, next) => {
     try {
@@ -901,11 +772,11 @@ const updateDish = async (req, res, next) => {
             }
         }
 
-        // 3️⃣ Validate section
-        const sectionError = validateSection(section);
-        if (sectionError) {
-            return next(createHttpError(400, sectionError));
-        }
+        // // 3️⃣ Validate section
+        // const sectionError = validateSection(section);
+        // if (sectionError) {
+        //     return next(createHttpError(400, sectionError));
+        // }
 
         // 4️⃣ Find and update dish
         const dishToUpdate = await Dishes.findById(dishId);
