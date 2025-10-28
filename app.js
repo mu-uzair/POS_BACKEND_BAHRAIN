@@ -120,6 +120,10 @@ app.use("/api/customers", require("./routes/customerRoutes"));
 // ...inventory routes as before...
 app.use("/api/product", require("./routes/Inventory/productRoute"));
 app.use("/api/vendor", require("./routes/Inventory/vendorRoute"));
+// app.use("/api/category", require("./routes/Inventory/inventoryCategoryRoute"));
+app.use("/api/inventory-category", require("./routes/Inventory/inventoryCategoryRoute"));
+app.use("/api/dishRecipe", require("./routes/Inventory/dishRecipeRoutes"));
+
 app.use("/api/transactions", require("./routes/Inventory/transactionRoute"));
 app.use("/api/metrics", require("./routes/Inventory/metricsroute"));
 

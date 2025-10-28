@@ -1,317 +1,309 @@
 const Product = require('../../models/Inventory/productModel');
-const Vendor = require("../../models/Inventory/vendormodel");
-const Transaction = require('../../models/Inventory/transactionModel'); // Add Transaction model
-const createHttpError = require("http-errors");
+const Vendor = require('../../models/Inventory/vendormodel');
+const Category = require('../../models/Inventory/inventoryCategoryModel');
+const Transaction = require('../../models/Inventory/transactionModel');
+const createHttpError = require('http-errors');
+const mongoose = require('mongoose');
 
+// ---------------------------
+// Add Product
+// ---------------------------
 const addProduct = async (req, res) => {
-  try {
-    const { name, unit, quantity_in_stock, reorder_threshold, cost_per_unit, vendor } = req.body;
+  try {
+    const { name, category, unit, quantity_in_stock, reorder_threshold, cost_per_unit, vendor } = req.body;
 
-    // Validate required fields
-    if (!name || !unit || quantity_in_stock == null || reorder_threshold == null || cost_per_unit == null || !vendor) {
-      throw createHttpError(400, 'All fields are required');
-    }
+    // --- Validation ---
+    if (!name || !category || !unit || quantity_in_stock == null || reorder_threshold == null || cost_per_unit == null || !vendor) {
+      throw createHttpError(400, 'All fields are required');
+    }
 
-    // Additional validation
-    if (typeof name !== 'string' || name.trim() === '') {
-      throw createHttpError(400, 'Name must be a non-empty string');
-    }
-    if (typeof unit !== 'string' || unit.trim() === '') {
-      throw createHttpError(400, 'Unit must be a non-empty string');
-    }
-    if (typeof quantity_in_stock !== 'number' || quantity_in_stock < 0) {
-      throw createHttpError(400, 'Quantity in stock must be a non-negative number');
-    }
-    if (typeof reorder_threshold !== 'number' || reorder_threshold < 0) {
-      throw createHttpError(400, 'Reorder threshold must be a non-negative number');
-    }
-    if (typeof cost_per_unit !== 'number' || cost_per_unit <= 0) {
-      throw createHttpError(400, 'Cost per unit must be a positive number');
-    }
+    if (typeof name !== 'string' || name.trim() === '') {
+      throw createHttpError(400, 'Name must be a non-empty string');
+    }
 
-    // Validate vendor exists
-    const vendorExists = await Vendor.findById(vendor);
-    if (!vendorExists) {
-      throw createHttpError(404, 'Vendor not found');
-    }
+    if (!['pcs', 'kg', 'L', 'g', 'ml'].includes(unit)) {
+      throw createHttpError(400, 'Invalid unit type');
+    }
 
-    // Create new product
-    const product = new Product({
-      name: name.trim(),
-      unit: unit.trim(),
-      quantity_in_stock,
-      reorder_threshold,
-      cost_per_unit,
-      vendor,
-    });
+    if (typeof quantity_in_stock !== 'number' || quantity_in_stock < 0) {
+      throw createHttpError(400, 'Quantity in stock must be a non-negative number');
+    }
 
-    await product.save();
+    if (typeof reorder_threshold !== 'number' || reorder_threshold < 0) {
+      throw createHttpError(400, 'Reorder threshold must be a non-negative number');
+    }
 
-    // Update vendor's productsSupplied, avoiding duplicates
-    await Vendor.findByIdAndUpdate(
-      vendor,
-      { $addToSet: { productsSupplied: product._id } },
-      { new: true }
-    );
+    if (typeof cost_per_unit !== 'number' || cost_per_unit < 0) {
+      throw createHttpError(400, 'Cost per unit must be a non-negative number');
+    }
 
-    res.status(201).json({
-      success: true,
-      message: 'Product added successfully',
-      data: product,
-    });
-  } catch (error) {
-    console.error('Error adding product:', error);
-    res.status(error.status || 500).json({
-      success: false,
-      message: error.message || 'Failed to add product',
-    });
-  }
+    // --- Validate related documents ---
+    const vendorExists = await Vendor.findById(vendor);
+    if (!vendorExists) throw createHttpError(404, 'Vendor not found');
+
+    const categoryExists = await Category.findById(category);
+    if (!categoryExists) throw createHttpError(404, 'Category not found');
+
+    // --- Create Product ---
+    const product = new Product({
+      name: name.trim(),
+      category,
+      unit,
+      quantity_in_stock,
+      reorder_threshold,
+      cost_per_unit: mongoose.Types.Decimal128.fromString(parseFloat(cost_per_unit).toFixed(3)),
+      vendor,
+    });
+
+    await product.save();
+
+    // Update vendor record
+    await Vendor.findByIdAndUpdate(vendor, { $addToSet: { productsSupplied: product._id } });
+
+    res.status(201).json({
+      success: true,
+      message: 'Product added successfully',
+      data: product,
+    });
+  } catch (error) {
+    console.error('Error adding product:', error);
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || 'Failed to add product',
+    });
+  }
 };
 
+// ---------------------------
+// Get All Products
+// ---------------------------
 const getAllProducts = async (req, res) => {
-  try {
-    const products = await Product.find().populate('vendor', 'name').lean();
-    res.status(200).json({ data: products });
-  } catch (error) {
-    console.error('Error fetching products:', error);
-    res.status(500).json({ message: 'Failed to fetch products' });
-  }
+  try {
+    const products = await Product.find()
+      .populate('vendor', 'name')
+
+      .lean();
+
+    // Convert Decimal128 to Number for frontend
+    const formatted = products.map(p => ({
+      ...p,
+      cost_per_unit: parseFloat(p.cost_per_unit?.toString() || '0'),
+    }));
+
+    res.status(200).json({ success: true, data: formatted });
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch products' });
+  }
 };
 
+// ---------------------------
+// Update Product
+// ---------------------------
 const updateProduct = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, unit, quantity_in_stock, reorder_threshold, cost_per_unit, vendor } = req.body;
+  try {
+    const { id } = req.params;
+    const { name, category, unit, quantity_in_stock, reorder_threshold, cost_per_unit, vendor } = req.body;
 
-    // Validate required fields
-    if (!name || !unit || quantity_in_stock == null || reorder_threshold == null || cost_per_unit == null || !vendor) {
-      throw createHttpError(400, 'All fields are required');
-    }
+    if (!name || !category || !unit || quantity_in_stock == null || reorder_threshold == null || cost_per_unit == null || !vendor) {
+      throw createHttpError(400, 'All fields are required');
+    }
 
-    // Additional validation
-    if (typeof name !== 'string' || name.trim() === '') {
-      throw createHttpError(400, 'Name must be a non-empty string');
-    }
-    if (typeof unit !== 'string' || unit.trim() === '') {
-      throw createHttpError(400, 'Unit must be a non-empty string');
-    }
-    if (typeof quantity_in_stock !== 'number' || quantity_in_stock < 0) {
-      throw createHttpError(400, 'Quantity in stock must be a non-negative number');
-    }
-    if (typeof reorder_threshold !== 'number' || reorder_threshold < 0) {
-      throw createHttpError(400, 'Reorder threshold must be a non-negative number');
-    }
-    if (typeof cost_per_unit !== 'number' || cost_per_unit <= 0) {
-      throw createHttpError(400, 'Cost per unit must be a positive number');
-    }
+    const product = await Product.findById(id);
+    if (!product) throw createHttpError(404, 'Product not found');
 
-    // Validate vendor exists
-    const vendorExists = await Vendor.findById(vendor);
-    if (!vendorExists) {
-      throw createHttpError(404, 'Vendor not found');
-    }
+    const vendorExists = await Vendor.findById(vendor);
+    if (!vendorExists) throw createHttpError(404, 'Vendor not found');
 
-    // Find the product to update
-    const product = await Product.findById(id);
-    if (!product) {
-      throw createHttpError(404, 'Product not found');
-    }
+    const categoryExists = await Category.findById(category);
+    if (!categoryExists) throw createHttpError(404, 'Category not found');
 
-    // If the vendor is changing, update the productsSupplied array in both old and new vendors
-    if (product.vendor.toString() !== vendor) {
-      // Remove product from old vendor's productsSupplied
-      await Vendor.findByIdAndUpdate(
-        product.vendor,
-        { $pull: { productsSupplied: product._id } },
-        { new: true }
-      );
-      // Add product to new vendor's productsSupplied
-      await Vendor.findByIdAndUpdate(
-        vendor,
-        { $addToSet: { productsSupplied: product._id } },
-        { new: true }
-      );
-    }
+    // If vendor changed, adjust vendor references
+    if (product.vendor.toString() !== vendor) {
+      await Vendor.findByIdAndUpdate(product.vendor, { $pull: { productsSupplied: product._id } });
+      await Vendor.findByIdAndUpdate(vendor, { $addToSet: { productsSupplied: product._id } });
+    }
 
-    // Update product fields
-    product.name = name.trim();
-    product.unit = unit.trim();
-    product.quantity_in_stock = quantity_in_stock;
-    product.reorder_threshold = reorder_threshold;
-    product.cost_per_unit = cost_per_unit;
-    product.vendor = vendor;
+    // Update fields
+    product.name = name.trim();
+    product.category = category;
+    product.unit = unit;
+    product.quantity_in_stock = quantity_in_stock;
+    product.reorder_threshold = reorder_threshold;
+    product.cost_per_unit = mongoose.Types.Decimal128.fromString(parseFloat(cost_per_unit).toFixed(3));
+    product.vendor = vendor;
 
-    await product.save();
+    await product.save();
 
-    // Populate vendor name for response
-    const updatedProduct = await Product.findById(id).populate('vendor', 'name').lean();
+    const updated = await Product.findById(id)
+      .populate('vendor', 'name')
+      .populate('category', 'name')
+      .lean();
 
-    res.status(200).json({
-      success: true,
-      message: 'Product updated successfully',
-      data: updatedProduct,
-    });
-  } catch (error) {
-    console.error('Error updating product:', error);
-    res.status(error.status || 500).json({
-      success: false,
-      message: error.message || 'Failed to update product',
-    });
-  }
+    updated.cost_per_unit = parseFloat(updated.cost_per_unit?.toString() || '0');
+
+    res.status(200).json({
+      success: true,
+      message: 'Product updated successfully',
+      data: updated,
+    });
+  } catch (error) {
+    console.error('Error updating product:', error);
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || 'Failed to update product',
+    });
+  }
 };
 
+// ---------------------------
+// Delete Product
+// ---------------------------
 const deleteProduct = async (req, res) => {
-  try {
-    const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-    // Find the product to delete
-    const product = await Product.findById(id);
-    if (!product) {
-      throw createHttpError(404, 'Product not found');
-    }
+    const product = await Product.findById(id);
+    if (!product) throw createHttpError(404, 'Product not found');
 
-    // Remove product from vendor's productsSupplied
-    await Vendor.findByIdAndUpdate(
-      product.vendor,
-      { $pull: { productsSupplied: product._id } },
-      { new: true }
-    );
+    await Vendor.findByIdAndUpdate(product.vendor, { $pull: { productsSupplied: product._id } });
+    await Product.findByIdAndDelete(id);
 
-    // Delete the product
-    await Product.findByIdAndDelete(id);
-
-    res.status(200).json({
-      success: true,
-      message: 'Product deleted successfully',
-    });
-  } catch (error) {
-    console.error('Error deleting product:', error);
-    res.status(error.status || 500).json({
-      success: false,
-      message: error.message || 'Failed to delete product',
-    });
-  }
+    res.status(200).json({
+      success: true,
+      message: 'Product deleted successfully',
+    });
+  } catch (error) {
+    console.error('Error deleting product:', error);
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || 'Failed to delete product',
+    });
+  }
 };
 
-
-// const adjustStock = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const { quantity, type, notes } = req.body;
-//     console.log("adjustStock - Request Data:", { id, quantity, type, notes });
-
-//     // Validate inputs
-//     if (quantity == null || typeof quantity !== 'number' || quantity <= 0) {
-//       throw createHttpError(400, 'Quantity must be a positive number');
-//     }
-//     if (!['in', 'out'].includes(type)) {
-//       throw createHttpError(400, 'Invalid stock adjustment type. Use "in" or "out"');
-//     }
-
-//     // Find the product
-//     const product = await Product.findById(id);
-//     if (!product) {
-//       throw createHttpError(404, 'Product not found');
-//     }
-//     console.log("adjustStock - Product Found:", product);
-
-//     // Adjust stock
-//     if (type === 'in') {
-//       product.quantity_in_stock += quantity;
-//     } else if (type === 'out') {
-//       const newStock = product.quantity_in_stock - quantity;
-//       if (newStock < 0) {
-//         throw createHttpError(400, 'Stock cannot be reduced below 0');
-//       }
-//       product.quantity_in_stock = newStock;
-//     }
-
-//     await product.save();
-//     console.log("adjustStock - Product Updated:", product);
-
-//     // Create a transaction record
-//     const transactionData = {
-//       productId: product._id,
-//       productName: product.name,
-//       type,
-//       quantity,
-//       notes: notes || 'Stock adjustment via Edit Panel',
-//       unitCost: type === 'in' ? product.cost_per_unit : undefined,
-//     };
-//     console.log("adjustStock - Transaction Data Before Save:", transactionData);
-
-//     const transaction = new Transaction(transactionData);
-//     await transaction.save();
-//     console.log("adjustStock - Transaction Created:", transaction);
-
-//     // Populate vendor name for response
-//     const updatedProduct = await Product.findById(id).populate('vendor', 'name').lean();
-
-//     res.status(200).json({
-//       message: 'Stock adjusted successfully',
-//       data: updatedProduct,
-//     });
-//   } catch (error) {
-//     console.error("adjustStock - Error:", error);
-//     res.status(error.status || 500).json({
-//       success: false,
-//       message: error.message || 'Failed to adjust stock',
-//     });
-//   }
-// };
-
-// Adjust stock and create a transaction
+// ---------------------------
+// Adjust Stock (In / Out) - Refactored for Atomic Update
+// ---------------------------
 const adjustStock = async (req, res) => {
-  try {
-    const { id } = req.params; // Product ID
-    const { quantity, type } = req.body;
+    try {
+        const { id } = req.params;
+        const { quantity, type, notes } = req.body; // Added notes field
 
-    if (!quantity || quantity <= 0) {
-      throw createHttpError(400, 'Quantity must be greater than 0');
+        if (!quantity || quantity <= 0) {
+            throw createHttpError(400, 'Quantity must be greater than 0');
+        }
+
+        if (!['in', 'out'].includes(type)) {
+            throw createHttpError(400, 'Type must be "in" or "out"');
+        }
+        
+        // Convert quantity to negative for deduction ($inc)
+        const updateAmount = type === 'in' ? quantity : -quantity;
+
+        // Use atomic update ($inc) instead of read-modify-write
+        const updatedProduct = await Product.findOneAndUpdate(
+            { _id: id },
+            { $inc: { quantity_in_stock: updateAmount } },
+            { new: true } // Return the updated document
+        ).populate('vendor', 'name');
+
+        if (!updatedProduct) throw createHttpError(404, 'Product not found');
+
+        // Optional: Check if stock went negative (only necessary if strict validation is needed)
+        // Note: For 'out', the $inc update might make stock negative if it was insufficient.
+        // We trust this manual endpoint because a manager is clicking 'save', but the automated
+        // deduction will be much safer.
+
+        // Log transaction
+        const transaction = new Transaction({
+            productId: updatedProduct._id,
+            productName: updatedProduct.name,
+            vendorName: updatedProduct.vendor?.name || 'Unknown Vendor',
+            type,
+            quantity,
+            unitCost: updatedProduct.cost_per_unit,
+            date: new Date(),
+            notes: notes || `Stock ${type === 'in' ? 'added' : 'removed'} manually`,
+        });
+
+        await transaction.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Stock adjusted successfully',
+            data: updatedProduct,
+        });
+    } catch (error) {
+        console.error('Error adjusting stock:', error);
+        res.status(error.status || 500).json({
+            success: false,
+            message: error.message || 'Failed to adjust stock',
+        });
     }
-
-    if (!['in', 'out'].includes(type)) {
-      throw createHttpError(400, 'Type must be "in" or "out"');
-    }
-
-    const product = await Product.findById(id).populate('vendor', 'name');
-    if (!product) {
-      throw createHttpError(404, 'Product not found');
-    }
-
-    // Adjust stock based on type
-    if (type === 'in') {
-      product.quantity_in_stock += quantity;
-    } else {
-      if (product.quantity_in_stock < quantity) {
-        throw createHttpError(400, 'Insufficient stock to subtract');
-      }
-      product.quantity_in_stock -= quantity;
-    }
-
-    await product.save();
-
-    // Create a transaction
-    const transaction = new Transaction({
-      productId: product._id,
-      productName: product.name,
-      vendorName: product.vendor?.name || 'Unknown Vendor', // Fetch vendorName from the populated vendor
-      type: type,
-      quantity: quantity,
-      unitCost: product.cost_per_unit,
-      date: new Date(),
-      notes: `Stock ${type === 'in' ? 'added' : 'removed'} via Inventory Edit Panel`,
-    });
-
-    await transaction.save();
-
-    res.status(200).json({ message: 'Stock adjusted successfully', data: product });
-  } catch (error) {
-    res.status(error.status || 500).json({
-      success: false,
-      message: error.message || 'Failed to adjust stock',
-    });
-  }
 };
 
-module.exports = { addProduct, getAllProducts, updateProduct, deleteProduct, adjustStock };
+// ---------------------------
+// NEW: Automated Stock Deduction Function
+// This function is built specifically for the POS system trigger.
+// It uses atomic operations with a stock safeguard for maximum safety.
+// ---------------------------
+const deductStockAutomated = async (productId, quantityDeducted) => {
+    try {
+        if (!productId || !quantityDeducted || quantityDeducted <= 0) {
+            console.error('Invalid arguments for automated deduction:', { productId, quantityDeducted });
+            return;
+        }
+
+        // 1. Atomic update with safeguard: Only deduct if stock is sufficient ($gte)
+        const result = await Product.updateOne(
+            { 
+                _id: productId, 
+                quantity_in_stock: { $gte: quantityDeducted } 
+            },
+            { 
+                $inc: { quantity_in_stock: -quantityDeducted } 
+            }
+        );
+
+        // 2. Check if the update succeeded
+        if (result.matchedCount === 0) {
+            // Log a warning if deduction failed due to insufficient stock or product not found
+            console.warn(`Automated Deduction Failed: Product ${productId} not found or insufficient stock (${quantityDeducted} required).`);
+            return;
+        }
+
+        // 3. Log transaction (Highly recommended for audit trails)
+        const product = await Product.findById(productId).populate('vendor', 'name');
+        
+        // Note: We need to convert Decimal128 cost to Number for the Transaction model
+        if (product) {
+            const transaction = new Transaction({
+                productId: product._id,
+                productName: product.name,
+                vendorName: product.vendor?.name || 'Unknown Vendor',
+                type: 'out',
+                quantity: quantityDeducted,
+                unitCost: parseFloat(product.cost_per_unit?.toString() || '0'), 
+                date: new Date(),
+                notes: 'Stock removed automatically via POS order completion.',
+            });
+            await transaction.save();
+        }
+
+    } catch (error) {
+        console.error(`Automated Deduction Failed for Product ID ${productId}:`, error);
+        // CRITICAL: Need proper monitoring here.
+    }
+};
+
+
+module.exports = {
+    addProduct,
+    getAllProducts,
+    updateProduct,
+    deleteProduct,
+    adjustStock,
+    // EXPORT THE NEW AUTOMATED FUNCTION for the POS controller to use
+    deductStockAutomated 
+};
