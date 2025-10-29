@@ -128,6 +128,10 @@ app.use("/api/transactions", require("./routes/Inventory/transactionRoute"));
 app.use("/api/metrics", require("./routes/Inventory/metricsroute"));
 
 
+app.use('/api/recipeTransactions', require('./routes/Inventory/recipeTransactionRoutes'));
+
+
+
 // global error handler
 app.use(globalErrorHandle);
 

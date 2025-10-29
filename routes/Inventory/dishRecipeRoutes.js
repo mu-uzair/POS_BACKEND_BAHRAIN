@@ -11,6 +11,8 @@ const {
   getRecipeByDishAndVariation,
 } = require('../../controllers/Inventory/dishRecipeController');
 
+const { adjustStockByRecipe, rollbackRecipeStock } = require('../../controllers/Inventory/recipeStockController');
+
 const { isVerifiedUser } = require('../../middleware/tokenVerification');
 
 // Routes for /api/dish-recipe
@@ -26,5 +28,9 @@ router.route('/:id')
 
 // Route for /api/dish-recipe/by/dish-variation
 router.get('/by/dish-variation', isVerifiedUser, getRecipeByDishAndVariation); // GET by dish + variation
+
+// new:
+router.post('/:id/stock-out', isVerifiedUser, adjustStockByRecipe);
+router.post('/txn/:id/rollback', isVerifiedUser, rollbackRecipeStock);
 
 module.exports = router;

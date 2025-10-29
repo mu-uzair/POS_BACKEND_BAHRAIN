@@ -168,4 +168,41 @@ const logout = async(req, res, next) => {
 
 
 }
-module.exports = { register, login, getUserData, logout } 
+
+const verifyAdminPasswordController = async (req, res, next) => {
+  try {
+    const { password } = req.body;
+    
+    // 1. Check for password presence
+    if (!password) {
+      return next(createHttpError(400, "Admin password required."));
+    }
+
+    // 2. Find an Admin user
+    // NOTE: This assumes there is an 'admin' role user to check against
+    const adminUser = await User.findOne({ role: { $regex: /^admin$/i } });
+
+    if (!adminUser) {
+      return next(createHttpError(404, "Admin account not found."));
+    }
+
+    // 3. Compare password securely
+    const isValidPassword = await bcrypt.compare(password, adminUser.password);
+
+    if (!isValidPassword) {
+      // Return 401 Unauthorized for security
+      return next(createHttpError(401, "Invalid admin password."));
+    }
+
+    // 4. Success: Password is valid
+    return res.status(200).json({
+      success: true,
+      message: "Password verified.",
+      // You might optionally return a temporary token here if needed
+    });
+  } catch (error) {
+    console.log("❌ ERROR in verifyAdminPasswordController:", error);
+    next(error);
+  }
+};
+module.exports = { register, login, getUserData, logout, verifyAdminPasswordController } 

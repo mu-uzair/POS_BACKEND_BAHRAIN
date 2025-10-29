@@ -251,11 +251,15 @@ const DeliveryBoy = require("../models/DeliveryBoyModel"); // MUST be imported f
 const { default: mongoose } = require("mongoose");
 const bcrypt = require("bcrypt");
 const User = require("../models/userModel"); // assuming your users are stored here
+const { 
+    deductStockForCompletedOrder, 
+    performInventoryRollback 
+} = require('./Inventory/recipeStockController'); 
 
 
 const addOrder = async (req, res, next) => {
     try {
-        console.log('Incoming Order Data:', req.body); // Debug log
+        // console.log('Incoming Order Data:', req.body); // Debug log
         const order = new Order(req.body);
         await order.save();
 
@@ -369,44 +373,465 @@ const updateOrder = async (req, res, next) => {
 
 
 
+// const updateOrderStatus = async (req, res, next) => {
+//     try {
+//         const { orderStatus } = req.body;
+//         const { id } = req.params;
+//         console.log("🟢 Incoming updateOrderStatus:", { id, orderStatus });
+
+//         if (!mongoose.Types.ObjectId.isValid(id)) {
+//             const error = createHttpError(404, "Invalid id!");
+//             return next(error);
+//         }
+
+//         const order = await Order.findByIdAndUpdate(
+//             id,
+//             { orderStatus },
+//             { new: true }
+//         );
+
+//         if (!order) {
+//             const error = createHttpError(404, "Order not found!");
+//             return next(error);
+//         }
+        
+//         // 🟢 SOCKET.IO: Emit general status update
+//         const io = req.app.get("socketio");
+//         if (io) {
+//             io.emit("orderUpdate", { 
+//                 action: "status_changed", 
+//                 orderId: id,
+//                 newStatus: orderStatus,
+//                 data: order
+//             });
+//         }
+
+//         res.status(200).json({ success: true, message: "Order updated!", data: order });
+//     } catch (error) {
+//         next(error);
+//     }
+// };
+
+
+// const updateOrderStatus = async (req, res, next) => {
+//     try {
+//         const { orderStatus: newStatus } = req.body; 
+//         const { id } = req.params; 
+//         const userId = req.user?.id || null; 
+//         ;
+        
+//         // Assuming Order is the model for order data
+        
+//          console.log("🟢 Incoming updateOrderStatus:", { id, newStatus, userId });
+
+//         if (!mongoose.Types.ObjectId.isValid(id)) {
+//             const error = createHttpError(404, "Invalid Order ID!");
+//             return next(error);
+//         }
+
+//         // 1. Fetch the order to determine the CURRENT status (MANDATORY for automation)
+//         const order = await Order.findById(id);
+//         if (!order) {
+//             const error = createHttpError(404, "Order not found!");
+//             return next(error);
+//         }
+        
+//         const previousStatus = order.orderStatus;
+//         let inventoryActionMessage = "";
+
+//         // 2. Automated Inventory Logic Trigger
+        
+//         // A. Deduction Trigger: Status changes TO 'Completed' from anything else
+//         const isDeductionNeeded = (
+//             newStatus === 'Completed' &&
+//             previousStatus !== 'Completed'
+//         );
+
+//         if (isDeductionNeeded) {
+//             try {
+//                 // CALLING SERVICE FUNCTION
+//                 const txnRecord = await deductStockForCompletedOrder(order, userId);
+//                 inventoryActionMessage = ` Inventory deducted (Txn: ${txnRecord._id}).`;
+//             } catch (err) {
+//                 console.error("Inventory Deduction failed:", err.message);
+//                 // Return 409 Conflict if stock deduction failed due to shortage
+//                 if (err.statusCode === 409) {
+//                      return next(err); 
+//                 }
+//                 inventoryActionMessage = ` Inventory deduction failed. Please check the transaction logs.`;
+//             }
+//         }
+
+//         // B. Rollback Trigger: Status changes TO 'Cancelled' FROM 'Completed'
+//         const isRollbackNeeded = (
+//             newStatus === 'Cancelled' &&
+//             previousStatus === 'Completed'
+//         );
+        
+//         if (isRollbackNeeded) {
+//             try {
+//                 // CALLING SERVICE FUNCTION
+//                 const rollbackTxn = await performInventoryRollback(id, userId);
+//                 inventoryActionMessage = ` Inventory rolled back (Txn: ${rollbackTxn._id}).`;
+//             } catch (err) {
+//                 console.error("Rollback failed:", err.message);
+//                 // Note: The order status is still updated, but the inventory correction failed.
+//                 inventoryActionMessage = ` Inventory rollback failed. Reason: ${err.message}.`;
+//             }
+//         }
+        
+//         // 3. Update the Order Status and save
+//         order.orderStatus = newStatus;
+//         await order.save(); 
+
+//         // 4. SOCKET.IO: Emit general status update
+//         // Assuming req.app.get("socketio") is correctly set up
+//         const io = req.app.get("socketio");
+//         if (io) {
+//             io.emit("orderUpdate", { 
+//                 action: "status_changed", 
+//                 orderId: id,
+//                 newStatus: newStatus,
+//                 data: order,
+//                 inventoryMessage: inventoryActionMessage.trim()
+//             });
+//         }
+
+//         res.status(200).json({ 
+//             success: true, 
+//             message: `Order updated to ${newStatus}.${inventoryActionMessage}`, 
+//             data: order 
+//         });
+//     } catch (error) {
+//         next(error);
+//     }
+// };
+
+// const updateOrderStatus = async (req, res, next) => {
+//     try {
+//         const { orderStatus: newStatus } = req.body; 
+//         const { id } = req.params; 
+//         const userId = req.user?.id || null; 
+        
+//         console.log("🟢 Incoming updateOrderStatus:", { id, newStatus, userId });
+
+//         if (!mongoose.Types.ObjectId.isValid(id)) {
+//             const error = createHttpError(404, "Invalid Order ID!");
+//             return next(error);
+//         }
+
+//         // 1. Fetch the order
+//         const order = await Order.findById(id).populate('items.menuItem');
+//         if (!order) {
+//             console.log("❌ Order not found!");
+//             const error = createHttpError(404, "Order not found!");
+//             return next(error);
+//         }
+        
+//         console.log("✅ Order found:", order._id);
+//         console.log("📦 Order has", order.items?.length, "items");
+        
+//         const previousStatus = order.orderStatus;
+//         console.log("📊 Previous Status:", previousStatus, "→ New Status:", newStatus);
+        
+//         let inventoryActionMessage = "";
+
+//         // 2. Check deduction condition
+//         const isDeductionNeeded = (
+//             newStatus === 'Completed' &&
+//             previousStatus !== 'Completed'
+//         );
+
+//         console.log("🔍 Is Deduction Needed?", isDeductionNeeded);
+//         console.log("   newStatus === 'Completed'?", newStatus === 'Completed');
+//         console.log("   previousStatus !== 'Completed'?", previousStatus !== 'Completed');
+
+//         if (isDeductionNeeded) {
+//             console.log("🚀 Starting inventory deduction...");
+            
+//             try {
+//                 const txnRecord = await deductStockForCompletedOrder(order, userId);
+//                 inventoryActionMessage = ` Inventory deducted (Txn: ${txnRecord._id}).`;
+//                 console.log("✅ Inventory deduction successful:", txnRecord._id);
+//             } catch (err) {
+//                 console.error("❌ Inventory Deduction failed:", err.message);
+//                 if (err.statusCode === 409) {
+//                      return next(err); 
+//                 }
+//                 inventoryActionMessage = ` Inventory deduction failed: ${err.message}`;
+//             }
+//         } else {
+//             console.log("⏭️ Skipping inventory deduction");
+//         }
+
+//         // 3. Update order status
+//         order.orderStatus = newStatus;
+//         await order.save(); 
+//         console.log("💾 Order status updated to:", newStatus);
+
+//         // 4. Socket emit
+//         const io = req.app.get("socketio");
+//         if (io) {
+//             io.emit("orderUpdate", { 
+//                 action: "status_changed", 
+//                 orderId: id,
+//                 newStatus: newStatus,
+//                 data: order,
+//                 inventoryMessage: inventoryActionMessage.trim()
+//             });
+//         }
+
+//         res.status(200).json({ 
+//             success: true, 
+//             message: `Order updated to ${newStatus}.${inventoryActionMessage}`, 
+//             data: order 
+//         });
+//     } catch (error) {
+//         console.error("💥 updateOrderStatus error:", error);
+//         next(error);
+//     }
+// };
+
+
+
+// const updateOrderStatus = async (req, res, next) => {
+//     try {
+//         const { orderStatus: newStatus } = req.body; 
+//         const { id } = req.params; 
+//         const userId = req.user?.id || null; 
+        
+//         console.log("🟢 Incoming updateOrderStatus:", { id, newStatus, userId });
+
+//         if (!mongoose.Types.ObjectId.isValid(id)) {
+//             const error = createHttpError(404, "Invalid Order ID!");
+//             return next(error);
+//         }
+
+//         // 1. Fetch the order
+//         const order = await Order.findById(id).populate('items.menuItem');
+//         if (!order) {
+//             console.log("❌ Order not found!");
+//             const error = createHttpError(404, "Order not found!");
+//             return next(error);
+//         }
+        
+//         console.log("✅ Order found:", order._id);
+//         console.log("📦 Order has", order.items?.length, "items");
+        
+//         const previousStatus = order.orderStatus;
+//         console.log("📊 Previous Status:", previousStatus, "→ New Status:", newStatus);
+        
+//         let inventoryActionMessage = "";
+
+//         // 2. Check if inventory deduction is needed (order completed)
+//         const isDeductionNeeded = (
+//             newStatus === 'Completed' &&
+//             previousStatus !== 'Completed'
+//         );
+
+//         // 3. Check if inventory rollback is needed (completed order cancelled)
+//         const isRollbackNeeded = (
+//             previousStatus === 'Completed' &&
+//             (newStatus === 'Cancelled' || newStatus === 'Rejected')
+//         );
+
+//         console.log("🔍 Is Deduction Needed?", isDeductionNeeded);
+//         console.log("   newStatus === 'Completed'?", newStatus === 'Completed');
+//         console.log("   previousStatus !== 'Completed'?", previousStatus !== 'Completed');
+        
+//         console.log("🔄 Is Rollback Needed?", isRollbackNeeded);
+//         console.log("   previousStatus === 'Completed'?", previousStatus === 'Completed');
+//         console.log("   newStatus is Cancelled/Rejected?", 
+//             newStatus === 'Cancelled' || newStatus === 'Rejected');
+
+//         // 4. Handle inventory deduction
+//         if (isDeductionNeeded) {
+//             console.log("🚀 Starting inventory deduction...");
+            
+//             try {
+//                 const txnRecord = await deductStockForCompletedOrder(order, userId);
+//                 inventoryActionMessage = ` Inventory deducted (Txn: ${txnRecord._id}).`;
+//                 console.log("✅ Inventory deduction successful:", txnRecord._id);
+//             } catch (err) {
+//                 console.error("❌ Inventory Deduction failed:", err.message);
+//                 if (err.statusCode === 409) {
+//                     return next(err); 
+//                 }
+//                 inventoryActionMessage = ` Inventory deduction failed: ${err.message}`;
+//             }
+//         } 
+//         // 5. Handle inventory rollback
+//         else if (isRollbackNeeded) {
+//             console.log("🔄 Starting inventory rollback...");
+            
+//             try {
+//                 const rollbackTxns = await performInventoryRollback(order._id.toString(), userId);
+//                 const txnIds = Array.isArray(rollbackTxns) 
+//                     ? rollbackTxns.map(t => t._id).join(', ')
+//                     : rollbackTxns._id;
+//                 inventoryActionMessage = ` Inventory rolled back (Txns: ${txnIds}).`;
+//                 console.log("✅ Inventory rollback successful:", txnIds);
+//             } catch (err) {
+//                 console.error("❌ Inventory Rollback failed:", err.message);
+//                 // Don't block cancellation if rollback fails, just log it
+//                 inventoryActionMessage = ` Warning: Inventory rollback failed: ${err.message}`;
+//             }
+//         } 
+//         else {
+//             console.log("⏭️ No inventory action needed");
+//         }
+
+//         // 6. Update order status
+//         order.orderStatus = newStatus;
+//         await order.save(); 
+//         console.log("💾 Order status updated to:", newStatus);
+
+//         // 7. Socket emit
+//         const io = req.app.get("socketio");
+//         if (io) {
+//             io.emit("orderUpdate", { 
+//                 action: "status_changed", 
+//                 orderId: id,
+//                 newStatus: newStatus,
+//                 previousStatus: previousStatus,
+//                 data: order,
+//                 inventoryMessage: inventoryActionMessage.trim()
+//             });
+//         }
+
+//         res.status(200).json({ 
+//             success: true, 
+//             message: `Order updated to ${newStatus}.${inventoryActionMessage}`, 
+//             data: order 
+//         });
+//     } catch (error) {
+//         console.error("💥 updateOrderStatus error:", error);
+//         next(error);
+//     }
+// };
+
+
 const updateOrderStatus = async (req, res, next) => {
     try {
-        const { orderStatus } = req.body;
-        const { id } = req.params;
-        console.log("🟢 Incoming updateOrderStatus:", { id, orderStatus });
+        const { orderStatus: newStatus } = req.body; 
+        const { id } = req.params; 
+        const userId = req.user?.id || null; 
+        
+        console.log("🟢 Incoming updateOrderStatus:", { id, newStatus, userId });
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            const error = createHttpError(404, "Invalid id!");
+            const error = createHttpError(404, "Invalid Order ID!");
             return next(error);
         }
 
-        const order = await Order.findByIdAndUpdate(
-            id,
-            { orderStatus },
-            { new: true }
-        );
-
+        // 1. Fetch the order
+        const order = await Order.findById(id).populate('items.menuItem');
         if (!order) {
+            console.log("❌ Order not found!");
             const error = createHttpError(404, "Order not found!");
             return next(error);
         }
         
-        // 🟢 SOCKET.IO: Emit general status update
+        console.log("✅ Order found:", order._id);
+        console.log("📦 Order has", order.items?.length, "items");
+        
+        const previousStatus = order.orderStatus;
+        console.log("📊 Previous Status:", previousStatus, "→ New Status:", newStatus);
+        
+        let inventoryActionMessage = "";
+
+        // 2. Check if inventory deduction is needed (order completed)
+        const isDeductionNeeded = (
+            newStatus === 'Completed' &&
+            previousStatus !== 'Completed'
+        );
+
+        // 3. Check if inventory rollback is needed (completed order cancelled)
+        const isRollbackNeeded = (
+            previousStatus === 'Completed' &&
+            (newStatus === 'Cancelled' || newStatus === 'Rejected')
+        );
+
+        console.log("🔍 Is Deduction Needed?", isDeductionNeeded);
+        console.log("   newStatus === 'Completed'?", newStatus === 'Completed');
+        console.log("   previousStatus !== 'Completed'?", previousStatus !== 'Completed');
+        
+        console.log("🔄 Is Rollback Needed?", isRollbackNeeded);
+        console.log("   previousStatus === 'Completed'?", previousStatus === 'Completed');
+        console.log("   newStatus is Cancelled/Rejected?", 
+            newStatus === 'Cancelled' || newStatus === 'Rejected');
+
+        // 4. Handle inventory deduction
+        if (isDeductionNeeded) {
+            console.log("🚀 Starting inventory deduction...");
+            console.log("   Order object _id:", order._id);
+            console.log("   Order object _id type:", typeof order._id);
+            
+            try {
+                const txnRecord = await deductStockForCompletedOrder(order, userId);
+                inventoryActionMessage = ` Inventory deducted (Txn: ${txnRecord._id}).`;
+                console.log("✅ Inventory deduction successful:", txnRecord._id);
+            } catch (err) {
+                console.error("❌ Inventory Deduction failed:", err.message);
+                if (err.statusCode === 409) {
+                    return next(err); 
+                }
+                inventoryActionMessage = ` Inventory deduction failed: ${err.message}`;
+            }
+        } 
+        // 5. Handle inventory rollback
+        else if (isRollbackNeeded) {
+            console.log("🔄 Starting inventory rollback...");
+            console.log("   Passing order._id:", order._id);
+            console.log("   As string:", order._id.toString());
+            
+            try {
+                const rollbackTxns = await performInventoryRollback(order._id.toString(), userId);
+                const txnIds = Array.isArray(rollbackTxns) 
+                    ? rollbackTxns.map(t => t._id).join(', ')
+                    : rollbackTxns._id;
+                inventoryActionMessage = ` Inventory rolled back (Txns: ${txnIds}).`;
+                console.log("✅ Inventory rollback successful:", txnIds);
+            } catch (err) {
+                console.error("❌ Inventory Rollback failed:", err.message);
+                console.error("   Full error:", err);
+                // Don't block cancellation if rollback fails, just log it
+                inventoryActionMessage = ` Warning: Inventory rollback failed: ${err.message}`;
+            }
+        } 
+        else {
+            console.log("⏭️ No inventory action needed");
+        }
+
+        // 6. Update order status
+        order.orderStatus = newStatus;
+        await order.save(); 
+        console.log("💾 Order status updated to:", newStatus);
+
+        // 7. Socket emit
         const io = req.app.get("socketio");
         if (io) {
             io.emit("orderUpdate", { 
                 action: "status_changed", 
                 orderId: id,
-                newStatus: orderStatus,
-                data: order
+                newStatus: newStatus,
+                previousStatus: previousStatus,
+                data: order,
+                inventoryMessage: inventoryActionMessage.trim()
             });
         }
 
-        res.status(200).json({ success: true, message: "Order updated!", data: order });
+        res.status(200).json({ 
+            success: true, 
+            message: `Order updated to ${newStatus}.${inventoryActionMessage}`, 
+            data: order 
+        });
     } catch (error) {
+        console.error("💥 updateOrderStatus error:", error);
         next(error);
     }
 };
+
 
 
 // const updateSectionItemsReady = async (req, res, next) => {
@@ -612,24 +1037,24 @@ const deleteOrder = async (req, res, next) => {
 
     // 🔹 Validate order ID
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      console.log("❌ Invalid order ID");
+      // console.log("❌ Invalid order ID");
       return next(createHttpError(400, "Invalid order ID."));
     }
 
     // 🔹 Check if order exists
     const order = await Order.findById(id);
     if (!order) {
-      console.log("❌ Order not found");
+      // console.log("❌ Order not found");
       return next(createHttpError(404, "Order not found."));
     }
 
     // 🔹 Normalize user role
     const userRole = user.role?.toLowerCase?.();
-    console.log("User Role Normalized:", userRole);
+    // console.log("User Role Normalized:", userRole);
 
     // 🔹 ADMIN — direct delete
     if (userRole === "admin") {
-      console.log("🟢 Admin detected — deleting directly");
+      // console.log("🟢 Admin detected — deleting directly");
 
       await Order.findByIdAndDelete(id);
       const io = req.app.get("socketio");
@@ -639,10 +1064,10 @@ const deleteOrder = async (req, res, next) => {
     }
 
     // 🔹 NON-ADMIN — must verify password
-    console.log("🟡 Non-admin detected — verifying password...");
+    // console.log("🟡 Non-admin detected — verifying password...");
 
     if (!password) {
-      console.log("❌ No password provided");
+      // console.log("❌ No password provided");
       return next(createHttpError(400, "Admin password required."));
     }
 
@@ -651,28 +1076,28 @@ const deleteOrder = async (req, res, next) => {
     console.log("Admin found:", adminUser?.email || "❌ none");
 
     if (!adminUser) {
-      console.log("❌ No admin user found in DB");
+      // console.log("❌ No admin user found in DB");
       return next(createHttpError(404, "Admin account not found."));
     }
 
     // 🔹 Compare password
     const isValidPassword = await bcrypt.compare(password, adminUser.password);
-    console.log("Password valid:", isValidPassword);
+    // console.log("Password valid:", isValidPassword);
 
     // 🚫 Wrong password → stop immediately
     if (!isValidPassword) {
-      console.log("❌ WRONG PASSWORD — stopping here!");
+      // console.log("❌ WRONG PASSWORD — stopping here!");
       return next(createHttpError(401, "Invalid admin password."));
     }
 
     // ✅ Safe delete path (only if admin OR password verified)
-    console.log("✅ Password verified — deleting order now...");
+    // console.log("✅ Password verified — deleting order now...");
     await Order.findByIdAndDelete(id);
 
     const io = req.app.get("socketio");
     if (io) io.emit("orderUpdate", { action: "order_deleted", orderId: id });
 
-    console.log("🟢 Order deleted successfully");
+    // console.log("🟢 Order deleted successfully");
 
     return res.status(200).json({
       success: true,

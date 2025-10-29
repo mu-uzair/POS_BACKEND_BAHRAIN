@@ -243,59 +243,6 @@ const adjustStock = async (req, res) => {
     }
 };
 
-// ---------------------------
-// NEW: Automated Stock Deduction Function
-// This function is built specifically for the POS system trigger.
-// It uses atomic operations with a stock safeguard for maximum safety.
-// ---------------------------
-const deductStockAutomated = async (productId, quantityDeducted) => {
-    try {
-        if (!productId || !quantityDeducted || quantityDeducted <= 0) {
-            console.error('Invalid arguments for automated deduction:', { productId, quantityDeducted });
-            return;
-        }
-
-        // 1. Atomic update with safeguard: Only deduct if stock is sufficient ($gte)
-        const result = await Product.updateOne(
-            { 
-                _id: productId, 
-                quantity_in_stock: { $gte: quantityDeducted } 
-            },
-            { 
-                $inc: { quantity_in_stock: -quantityDeducted } 
-            }
-        );
-
-        // 2. Check if the update succeeded
-        if (result.matchedCount === 0) {
-            // Log a warning if deduction failed due to insufficient stock or product not found
-            console.warn(`Automated Deduction Failed: Product ${productId} not found or insufficient stock (${quantityDeducted} required).`);
-            return;
-        }
-
-        // 3. Log transaction (Highly recommended for audit trails)
-        const product = await Product.findById(productId).populate('vendor', 'name');
-        
-        // Note: We need to convert Decimal128 cost to Number for the Transaction model
-        if (product) {
-            const transaction = new Transaction({
-                productId: product._id,
-                productName: product.name,
-                vendorName: product.vendor?.name || 'Unknown Vendor',
-                type: 'out',
-                quantity: quantityDeducted,
-                unitCost: parseFloat(product.cost_per_unit?.toString() || '0'), 
-                date: new Date(),
-                notes: 'Stock removed automatically via POS order completion.',
-            });
-            await transaction.save();
-        }
-
-    } catch (error) {
-        console.error(`Automated Deduction Failed for Product ID ${productId}:`, error);
-        // CRITICAL: Need proper monitoring here.
-    }
-};
 
 
 module.exports = {
@@ -305,5 +252,5 @@ module.exports = {
     deleteProduct,
     adjustStock,
     // EXPORT THE NEW AUTOMATED FUNCTION for the POS controller to use
-    deductStockAutomated 
+  
 };
