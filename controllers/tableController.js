@@ -81,6 +81,77 @@ const updateTable = async (req, res, next) => {
     
 };
 
+// const updateTableData = async (req, res, next) => {
+//     try {
+//         const { id } = req.params;
+//         const updates = req.body;
+
+//         // 👉 Check what is coming from frontend
+//         console.log("Received updates from frontend:", updates);
+
+//         // Validate ID
+//         if (!mongoose.Types.ObjectId.isValid(id)) {
+//             return next(createHttpError(400, "Invalid table ID!"));
+//         }
+
+//         // Allowed fields
+//         const allowedUpdates = ['tableNumber', 'seats'];
+
+//         // Check for invalid fields
+//         const invalidFields = Object.keys(updates).filter(
+//             (key) => !allowedUpdates.includes(key)
+//         );
+
+//         if (invalidFields.length > 0) {
+//             return next(
+//                 createHttpError(400, `Invalid fields: ${invalidFields.join(", ")}`)
+//             );
+//         }
+
+//         // Prepare sanitized updates
+//         const sanitizedUpdates = {};
+
+//         // Handle tableNumber if provided
+//         if (updates.tableNumber !== undefined) {
+//             const tableNumber = Number(updates.tableNumber);
+//             console.log("Parsed tableNumber:", tableNumber); // Debugging value
+//             if (isNaN(tableNumber) || tableNumber <= 0) {
+//                 return next(createHttpError(400, "Table number must be a valid positive number!"));
+//             }
+//             sanitizedUpdates.tableNumber = tableNumber;
+//         }
+
+//         // Handle seats if provided
+//         if (updates.seats !== undefined) {
+//             const seats = Number(updates.seats);
+//             console.log("Parsed seats:", seats); // Debugging value
+//             if (isNaN(seats) || seats <= 0) {
+//                 return next(createHttpError(400, "Seats must be a valid positive number!"));
+//             }
+//             sanitizedUpdates.seats = seats;
+//         }
+
+//         // 👉 Check final sanitized updates before sending to DB
+//         console.log("Final sanitized updates to apply:", sanitizedUpdates);
+
+//         // Update the table
+//         const table = await Table.findByIdAndUpdate(id, sanitizedUpdates, { new: true });
+
+//         if (!table) {
+//             return next(createHttpError(404, "Table not found!"));
+//         }
+
+//         res.status(200).json({
+//             success: true,
+//             message: "Table updated!",
+//             data: table,
+//         });
+//     } catch (error) {
+//         console.error("Error updating table:", error);
+//         return next(error);
+//     }
+// };
+
 const updateTableData = async (req, res, next) => {
     try {
         const { id } = req.params;
@@ -94,8 +165,8 @@ const updateTableData = async (req, res, next) => {
             return next(createHttpError(400, "Invalid table ID!"));
         }
 
-        // Allowed fields
-        const allowedUpdates = ['tableNumber', 'seats'];
+        // Allowed fields - Added 'status'
+        const allowedUpdates = ['tableNo', 'seats', 'status']; // Note: I used 'tableNo' to match your data structure
 
         // Check for invalid fields
         const invalidFields = Object.keys(updates).filter(
@@ -110,15 +181,16 @@ const updateTableData = async (req, res, next) => {
 
         // Prepare sanitized updates
         const sanitizedUpdates = {};
+        const validStatuses = ['Available', 'Booked'];
 
-        // Handle tableNumber if provided
-        if (updates.tableNumber !== undefined) {
-            const tableNumber = Number(updates.tableNumber);
-            console.log("Parsed tableNumber:", tableNumber); // Debugging value
-            if (isNaN(tableNumber) || tableNumber <= 0) {
+        // Handle tableNo if provided (assuming frontend sends 'tableNo' to match DB, not 'tableNumber')
+        if (updates.tableNo !== undefined) {
+            const tableNo = Number(updates.tableNo);
+            console.log("Parsed tableNo:", tableNo); // Debugging value
+            if (isNaN(tableNo) || tableNo <= 0) {
                 return next(createHttpError(400, "Table number must be a valid positive number!"));
             }
-            sanitizedUpdates.tableNumber = tableNumber;
+            sanitizedUpdates.tableNo = tableNo;
         }
 
         // Handle seats if provided
@@ -131,6 +203,26 @@ const updateTableData = async (req, res, next) => {
             sanitizedUpdates.seats = seats;
         }
 
+        // 🟢 NEW: Handle status if provided and validate its value
+        if (updates.status !== undefined) {
+            const status = updates.status;
+            console.log("Received status:", status);
+
+            if (!validStatuses.includes(status)) {
+                return next(createHttpError(400, "Invalid status value. Status must be 'Available' or 'Booked'."));
+            }
+            sanitizedUpdates.status = status;
+        }
+
+        // Check if there are any updates to apply
+        if (Object.keys(sanitizedUpdates).length === 0) {
+            return res.status(200).json({
+                success: false,
+                message: "No valid fields provided for update.",
+                data: null,
+            });
+        }
+        
         // 👉 Check final sanitized updates before sending to DB
         console.log("Final sanitized updates to apply:", sanitizedUpdates);
 
@@ -151,6 +243,8 @@ const updateTableData = async (req, res, next) => {
         return next(error);
     }
 };
+
+
 
 const deleteTable = async (req, res, next) => {
     try {

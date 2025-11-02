@@ -15,6 +15,8 @@ const mongoose = require('mongoose');
  *   - options: { detailedLogging: boolean, notes: string, createdBy: userId }
  */
 const adjustStockByRecipe = async (req, res, next) => {
+
+  console.log("🔧 adjustStockByRecipe called");
   try {
     const { id: recipeId } = req.params;
     const { qtyOfDishes = 1, detailedLogging = false, notes } = req.body;

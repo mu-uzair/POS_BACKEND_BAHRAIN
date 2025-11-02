@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const recipeTransactionSchema = new mongoose.Schema({
    orderId: {
         type: String,  // Store as String, not ObjectId
-        required: true,
+        required: false,
         index: true
     },
   recipeId: { type: mongoose.Schema.Types.ObjectId, ref: 'DishRecipe', required: true },

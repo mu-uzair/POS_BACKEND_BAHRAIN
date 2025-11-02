@@ -1023,92 +1023,181 @@ const updateSectionItemsReady = async (req, res, next) => {
 
 
 
+// // DELETE ORDER CONTROLLER
+// const deleteOrder = async (req, res, next) => {
+//   try {
+//     const { id } = req.params;
+//     const { password } = req.body;
+//     const user = req.user;
+
+//     console.log("🧩 DELETE ORDER DEBUG START 🧩");
+//     console.log("Order ID:", id);
+//     console.log("User:", user);
+//     console.log("Password received:", password ? "✅ yes" : "❌ no");
+
+//     // 🔹 Validate order ID
+//     if (!mongoose.Types.ObjectId.isValid(id)) {
+//       // console.log("❌ Invalid order ID");
+//       return next(createHttpError(400, "Invalid order ID."));
+//     }
+
+//     // 🔹 Check if order exists
+//     const order = await Order.findById(id);
+//     if (!order) {
+//       // console.log("❌ Order not found");
+//       return next(createHttpError(404, "Order not found."));
+//     }
+
+//     // 🔹 Normalize user role
+//     const userRole = user.role?.toLowerCase?.();
+//     // console.log("User Role Normalized:", userRole);
+
+//     // 🔹 ADMIN — direct delete
+//     if (userRole === "admin") {
+//       // console.log("🟢 Admin detected — deleting directly");
+
+//       await Order.findByIdAndDelete(id);
+//       const io = req.app.get("socketio");
+//       if (io) io.emit("orderUpdate", { action: "order_deleted", orderId: id });
+
+//       return res.json({ success: true, message: "Order deleted by admin." });
+//     }
+
+//     // 🔹 NON-ADMIN — must verify password
+//     // console.log("🟡 Non-admin detected — verifying password...");
+
+//     if (!password) {
+//       // console.log("❌ No password provided");
+//       return next(createHttpError(400, "Admin password required."));
+//     }
+
+//     // 🔹 Find admin user
+//     const adminUser = await User.findOne({ role: { $regex: /^admin$/i } });
+//     console.log("Admin found:", adminUser?.email || "❌ none");
+
+//     if (!adminUser) {
+//       // console.log("❌ No admin user found in DB");
+//       return next(createHttpError(404, "Admin account not found."));
+//     }
+
+//     // 🔹 Compare password
+//     const isValidPassword = await bcrypt.compare(password, adminUser.password);
+//     // console.log("Password valid:", isValidPassword);
+
+//     // 🚫 Wrong password → stop immediately
+//     if (!isValidPassword) {
+//       // console.log("❌ WRONG PASSWORD — stopping here!");
+//       return next(createHttpError(401, "Invalid admin password."));
+//     }
+
+//     // ✅ Safe delete path (only if admin OR password verified)
+//     // console.log("✅ Password verified — deleting order now...");
+//     await Order.findByIdAndDelete(id);
+
+//     const io = req.app.get("socketio");
+//     if (io) io.emit("orderUpdate", { action: "order_deleted", orderId: id });
+
+//     // console.log("🟢 Order deleted successfully");
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Order deleted after admin password verification.",
+//     });
+//   } catch (error) {
+//     console.log("❌ ERROR in deleteOrder:", error);
+//     next(error);
+//   }
+// };
+
+
+
 // DELETE ORDER CONTROLLER
 const deleteOrder = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { password } = req.body;
-    const user = req.user;
+  try {
+    const { id } = req.params;
+    const { password } = req.body;
+    const user = req.user;
 
-    console.log("🧩 DELETE ORDER DEBUG START 🧩");
-    console.log("Order ID:", id);
-    console.log("User:", user);
-    console.log("Password received:", password ? "✅ yes" : "❌ no");
+    console.log("🧩 DELETE ORDER DEBUG START 🧩");
+    console.log("Order ID:", id);
+    console.log("User:", user);
+    console.log("Password received:", password ? "✅ yes" : "❌ no");
 
-    // 🔹 Validate order ID
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      // console.log("❌ Invalid order ID");
-      return next(createHttpError(400, "Invalid order ID."));
-    }
+    // 🔹 Validate order ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      // console.log("❌ Invalid order ID");
+      return next(createHttpError(400, "Invalid order ID."));
+    }
 
-    // 🔹 Check if order exists
-    const order = await Order.findById(id);
-    if (!order) {
-      // console.log("❌ Order not found");
-      return next(createHttpError(404, "Order not found."));
-    }
+    // 🔹 Check if order exists
+    const order = await Order.findById(id);
+    if (!order) {
+      // console.log("❌ Order not found");
+      return next(createHttpError(404, "Order not found."));
+    }
 
-    // 🔹 Normalize user role
-    const userRole = user.role?.toLowerCase?.();
-    // console.log("User Role Normalized:", userRole);
+    // 🔹 Normalize user role
+    const userRole = user.role?.toLowerCase?.();
+    // console.log("User Role Normalized:", userRole);
 
-    // 🔹 ADMIN — direct delete
-    if (userRole === "admin") {
-      // console.log("🟢 Admin detected — deleting directly");
+    // 🔹 ADMIN — direct delete
+    if (userRole === "admin") {
+      // console.log("🟢 Admin detected — deleting directly");
 
-      await Order.findByIdAndDelete(id);
-      const io = req.app.get("socketio");
-      if (io) io.emit("orderUpdate", { action: "order_deleted", orderId: id });
+      await Order.findByIdAndDelete(id);
+      const io = req.app.get("socketio");
+      if (io) io.emit("orderUpdate", { action: "order_deleted", orderId: id });
 
-      return res.json({ success: true, message: "Order deleted by admin." });
-    }
+      return res.json({ success: true, message: "Order deleted by admin." });
+    }
 
-    // 🔹 NON-ADMIN — must verify password
-    // console.log("🟡 Non-admin detected — verifying password...");
+    // 🔹 NON-ADMIN — must verify password
+    // console.log("🟡 Non-admin detected — verifying password...");
 
-    if (!password) {
-      // console.log("❌ No password provided");
-      return next(createHttpError(400, "Admin password required."));
-    }
+    if (!password) {
+      // console.log("❌ No password provided");
+      return next(createHttpError(400, "Admin password required."));
+    }
 
-    // 🔹 Find admin user
-    const adminUser = await User.findOne({ role: { $regex: /^admin$/i } });
-    console.log("Admin found:", adminUser?.email || "❌ none");
+    // 🔹 Find admin user
+    // 🛑 FIX HERE: Explicitly select the password hash for comparison
+    const adminUser = await User.findOne({ role: { $regex: /^admin$/i } }).select('+password');
+    console.log("Admin found:", adminUser?.email || "❌ none");
 
-    if (!adminUser) {
-      // console.log("❌ No admin user found in DB");
-      return next(createHttpError(404, "Admin account not found."));
-    }
+    if (!adminUser) {
+      // console.log("❌ No admin user found in DB");
+      return next(createHttpError(404, "Admin account not found."));
+    }
 
-    // 🔹 Compare password
-    const isValidPassword = await bcrypt.compare(password, adminUser.password);
-    // console.log("Password valid:", isValidPassword);
+    // 🔹 Compare password
+    // This line now receives the hash and will no longer throw the error.
+    const isValidPassword = await bcrypt.compare(password, adminUser.password);
+    // console.log("Password valid:", isValidPassword);
 
-    // 🚫 Wrong password → stop immediately
-    if (!isValidPassword) {
-      // console.log("❌ WRONG PASSWORD — stopping here!");
-      return next(createHttpError(401, "Invalid admin password."));
-    }
+    // 🚫 Wrong password → stop immediately
+    if (!isValidPassword) {
+      // console.log("❌ WRONG PASSWORD — stopping here!");
+      return next(createHttpError(401, "Invalid admin password."));
+    }
 
-    // ✅ Safe delete path (only if admin OR password verified)
-    // console.log("✅ Password verified — deleting order now...");
-    await Order.findByIdAndDelete(id);
+    // ✅ Safe delete path (only if admin OR password verified)
+    // console.log("✅ Password verified — deleting order now...");
+    await Order.findByIdAndDelete(id);
 
-    const io = req.app.get("socketio");
-    if (io) io.emit("orderUpdate", { action: "order_deleted", orderId: id });
+    const io = req.app.get("socketio");
+    if (io) io.emit("orderUpdate", { action: "order_deleted", orderId: id });
 
-    // console.log("🟢 Order deleted successfully");
+    // console.log("🟢 Order deleted successfully");
 
-    return res.status(200).json({
-      success: true,
-      message: "Order deleted after admin password verification.",
-    });
-  } catch (error) {
-    console.log("❌ ERROR in deleteOrder:", error);
-    next(error);
-  }
+    return res.status(200).json({
+      success: true,
+      message: "Order deleted after admin password verification.",
+    });
+  } catch (error) {
+    console.log("❌ ERROR in deleteOrder:", error);
+    next(error);
+  }
 };
-
 
 
 // PATCH: Assign or change the delivery boy for an order
