@@ -35,6 +35,7 @@
 const mongoose = require("mongoose");
 
 const orderSchema = new mongoose.Schema({
+    
     // --- 1. CORE ORDER ID (Cleaned up) ---
     // Assuming 'orderId' is the human-readable identifier (e.g., "ORD-001")
     // Note: MongoDB automatically assigns the '_id' ObjectId primary key.
