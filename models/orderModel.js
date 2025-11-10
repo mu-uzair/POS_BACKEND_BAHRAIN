@@ -62,6 +62,8 @@ const orderSchema = new mongoose.Schema({
         }
     },
 
+    comment: { type: String, default: "" , trim:true},
+
     // --- 3. DELIVERY LOGISTICS (NEW FIELDS) ---
     // Foreign Key Reference to the assigned Delivery Boy
     deliveryBoyId: {
