@@ -135,4 +135,19 @@ const deleteCustomer = async (req, res, next) => {
     }
 };
 
-module.exports = { searchCustomer, deleteCustomer, addCustomer };
+
+
+
+const getAllCustomers = async (req, res, next) => {
+  try {
+    const customers = await Customer.find({}, '_id  phone_number name address'); // select only necessary fields
+    res.status(200).json({ success: true, data: customers });
+  } catch (err) {
+    next(createHttpError(500, err.message || 'Failed to fetch customers'));
+  }
+};
+
+module.exports = {  };
+
+
+module.exports = { searchCustomer, deleteCustomer, addCustomer, getAllCustomers };

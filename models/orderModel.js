@@ -103,4 +103,7 @@ const orderSchema = new mongoose.Schema({
     paymentMethod: { type: String }
 }, { timestamps: true });
 
+// 🔹 Add this for faster queries by creation date
+orderSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.model("Order", orderSchema);

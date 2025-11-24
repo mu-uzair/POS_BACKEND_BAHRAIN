@@ -25,7 +25,8 @@ const router = express.Router();
 const { 
     addCustomer,    // <-- New import for POST request
     searchCustomer, 
-    deleteCustomer 
+    deleteCustomer,
+    getAllCustomers 
 } = require("../controllers/deliveryCustomerController");
 const { isVerifiedUser } = require('../middleware/tokenVerification');
 
@@ -43,4 +44,5 @@ router.route("/search")
 router.route("/:phone")
     .delete(isVerifiedUser, deleteCustomer);
 
+    router.route('/').get(isVerifiedUser, getAllCustomers);
 module.exports = router;

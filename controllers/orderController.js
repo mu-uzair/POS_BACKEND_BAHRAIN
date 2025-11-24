@@ -299,14 +299,34 @@ const getOrderById = async (req, res, next) => {
     }
 };
 
+// const getOrders = async (req, res, next) => {
+//     try {
+//         // FIXED: Use "deliveryBoyId" for population
+//         const orders = await Order.find().populate("table").populate("deliveryBoyId", "name phone");
+//         res.status(200).json({ data: orders });
+//     } catch (error) {
+//         next(error);
+//     }
+// };
+
 const getOrders = async (req, res, next) => {
-    try {
-        // FIXED: Use "deliveryBoyId" for population
-        const orders = await Order.find().populate("table").populate("deliveryBoyId", "name phone");
-        res.status(200).json({ data: orders });
-    } catch (error) {
-        next(error);
+  try {
+    const { since } = req.query; // could be undefined
+    const query = {};
+
+    if (since && !isNaN(Number(since))) {
+      query.createdAt = { $gte: new Date(Number(since)) };
     }
+
+    const orders = await Order.find(query)
+      .populate("table")
+      .populate("deliveryBoyId", "name phone")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({ success: true, data: orders });
+  } catch (error) {
+    next(error);
+  }
 };
 
 const getOrdersByStatus = async (req, res, next) => {

@@ -130,6 +130,9 @@ app.use("/api/metrics", require("./routes/Inventory/metricsroute"));
 
 app.use('/api/recipeTransactions', require('./routes/Inventory/recipeTransactionRoutes'));
 
+app.get("/", (req, res) => {
+  res.send("✅ POS Backend is running!");
+});
 
 
 // global error handler
