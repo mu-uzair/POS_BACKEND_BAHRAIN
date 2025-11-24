@@ -285,21 +285,21 @@ const login = async (req, res, next) => {
         );
 
         // Security Fix 3: Ensure HttpOnly and Secure flags are set correctly on the cookie.
-        // res.cookie('accessToken', accessToken, {
-        //     maxAge: 1000 * 60 * 60 * 24, // 1 day
-        //     httpOnly: true, // Prevents client-side JS access (XSS defense)
-        //     sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax', 
-        //     secure: process.env.NODE_ENV === 'production', // Only send over HTTPS in production
-        // });
-        // change this for iphone login issue
         res.cookie('accessToken', accessToken, {
-            httpOnly: true,
-            secure: true, // must be HTTPS
-            sameSite: 'None', // allow cross-site
-            domain: '.onrender.com', // allow subdomain sharing
-            path: '/', // required
             maxAge: 1000 * 60 * 60 * 24, // 1 day
+            httpOnly: true, // Prevents client-side JS access (XSS defense)
+            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax', 
+            secure: process.env.NODE_ENV === 'production', // Only send over HTTPS in production
         });
+        // change this for iphone login issue
+        // res.cookie('accessToken', accessToken, {
+        //     httpOnly: true,
+        //     secure: true, // must be HTTPS
+        //     sameSite: 'None', // allow cross-site
+        //     domain: '.onrender.com', // allow subdomain sharing
+        //     path: '/', // required
+        //     maxAge: 1000 * 60 * 60 * 24, // 1 day
+        // });
 
 
         // 🛑 SECURITY FIX 4: Filter sensitive data (password hash) before sending response.
@@ -345,18 +345,18 @@ const getUserData = async (req, res, next) => {
 
 const logout = async (req, res, next) => {
     try {
-        // res.clearCookie('accessToken', {
-        //     httpOnly: true,
-        //     sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
-        //     secure: process.env.NODE_ENV === 'production',
-        // });
-        // change this for iphone login issue 
-        res.clearCookie("accessToken", {
+        res.clearCookie('accessToken', {
             httpOnly: true,
-            secure: true,
-            sameSite: "None",
-            domain: ".onrender.com",
+            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
+            secure: process.env.NODE_ENV === 'production',
         });
+        // change this for iphone login issue 
+        // res.clearCookie("accessToken", {
+        //     httpOnly: true,
+        //     secure: true,
+        //     sameSite: "None",
+        //     domain: ".onrender.com",
+        // });
 
         res.status(200).json({ success: true, message: "User logged out successfully" });
     } catch (error) {
