@@ -291,13 +291,14 @@ const login = async (req, res, next) => {
         //     sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax', 
         //     secure: process.env.NODE_ENV === 'production', // Only send over HTTPS in production
         // });
-// change this for iphone login issue
-        res.cookie("accessToken", accessToken, {
-            maxAge: 1000 * 60 * 60 * 24, // 1 day
+        // change this for iphone login issue
+        res.cookie('accessToken', accessToken, {
             httpOnly: true,
-            secure: true,
-            sameSite: "None",
-            domain: ".onrender.com", // <--- THIS IS THE FIX FOR SAFARI
+            secure: true, // must be HTTPS
+            sameSite: 'None', // allow cross-site
+            domain: '.onrender.com', // allow subdomain sharing
+            path: '/', // required
+            maxAge: 1000 * 60 * 60 * 24, // 1 day
         });
 
 
@@ -349,7 +350,7 @@ const logout = async (req, res, next) => {
         //     sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
         //     secure: process.env.NODE_ENV === 'production',
         // });
-// change this for iphone login issue 
+        // change this for iphone login issue 
         res.clearCookie("accessToken", {
             httpOnly: true,
             secure: true,
