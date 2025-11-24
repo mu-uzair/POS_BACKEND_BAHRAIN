@@ -108,14 +108,12 @@ const isVerifiedUser = async (req, res, next)=>{
             const error = createHttpError(401, "Please provide token!");
             return next(error);
         }
-        // console.log("Access Token:", accessToken);
-        // console.log("Access Token Secret:", accessTokenSecret);
-        // console.log("process.env.JWT_SECRET", process.env.JWT_SECRET);
+      
         
 
         const decodeToken = jwt.verify(accessToken, accessTokenSecret);
 
-        // console.log("decode tokenn" +decodeToken)
+       
 
         const user= await User.findById(decodeToken._id);
         if(!user){

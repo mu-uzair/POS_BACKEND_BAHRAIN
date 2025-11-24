@@ -68,7 +68,7 @@
 
 // const login = async (req, res, next) => {
 
-    
+
 
 
 //     try {
@@ -94,7 +94,7 @@
 //             expiresIn: '1d'
 //         });
 
-      
+
 
 
 //         // console.log("User Found:", isUserPresent);
@@ -116,7 +116,7 @@
 //             sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax', // None for Render, Lax for localhost
 //             secure: process.env.NODE_ENV === 'production', // Secure true on production (HTTPS)
 //         });
-        
+
 
 //         res.status(200).json({
 //             success: true,
@@ -159,11 +159,11 @@
 //             secure: process.env.NODE_ENV === 'production', // Same as when setting
 //         });
 //         res.status(200).json({ success: true, message: "User logged out successfully" });
-        
+
 
 //     } catch (error) {
 //         next(error);
-        
+
 //     }
 
 
@@ -172,7 +172,7 @@
 // const verifyAdminPasswordController = async (req, res, next) => {
 //   try {
 //     const { password } = req.body;
-    
+
 //     // 1. Check for password presence
 //     if (!password) {
 //       return next(createHttpError(400, "Admin password required."));
@@ -214,14 +214,14 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
 // Ensure JWT_SECRET is loaded from .env
-require("dotenv").config(); 
+require("dotenv").config();
 // Ensure your .env has a JWT_SECRET defined.
-const accessTokenSecret = process.env.JWT_SECRET; 
+const accessTokenSecret = process.env.JWT_SECRET;
 
 
 const register = async (req, res, next) => {
     try {
-        const { name, phone, email, password } = req.body; 
+        const { name, phone, email, password } = req.body;
 
         if (!name || !phone || !email || !password) {
             return next(createHttpError(400, "All fields are required"));
@@ -229,7 +229,7 @@ const register = async (req, res, next) => {
 
         // We need to SELECT the password field explicitly for this check 
         // if your schema has `select: false` set (which it should).
-        const isUserPresent = await User.findOne({ email }).select('+password'); 
+        const isUserPresent = await User.findOne({ email }).select('+password');
         if (isUserPresent) {
             return next(createHttpError(400, "User already exists!"));
         }
@@ -265,7 +265,7 @@ const login = async (req, res, next) => {
 
         // 🛑 SECURITY FIX 1: Explicitly SELECT the password hash ONLY for comparison.
         // This is crucial if you set `select: false` in your Mongoose schema.
-        const isUserPresent = await User.findOne({ email }).select('+password'); 
+        const isUserPresent = await User.findOne({ email }).select('+password');
 
         if (!isUserPresent) {
             return next(createHttpError(401, "Invalid Credentials"));
@@ -280,22 +280,31 @@ const login = async (req, res, next) => {
         // DO NOT include the full user object or the password hash.
         const accessToken = jwt.sign(
             { _id: isUserPresent._id, role: isUserPresent.role }, // ONLY ID AND ROLE
-            accessTokenSecret, 
+            accessTokenSecret,
             { expiresIn: '1d' }
         );
 
         // Security Fix 3: Ensure HttpOnly and Secure flags are set correctly on the cookie.
-        res.cookie('accessToken', accessToken, {
+        // res.cookie('accessToken', accessToken, {
+        //     maxAge: 1000 * 60 * 60 * 24, // 1 day
+        //     httpOnly: true, // Prevents client-side JS access (XSS defense)
+        //     sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax', 
+        //     secure: process.env.NODE_ENV === 'production', // Only send over HTTPS in production
+        // });
+// change this for iphone login issue
+        res.cookie("accessToken", accessToken, {
             maxAge: 1000 * 60 * 60 * 24, // 1 day
-            httpOnly: true, // Prevents client-side JS access (XSS defense)
-            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax', 
-            secure: process.env.NODE_ENV === 'production', // Only send over HTTPS in production
+            httpOnly: true,
+            secure: true,
+            sameSite: "None",
+            domain: ".onrender.com", // <--- THIS IS THE FIX FOR SAFARI
         });
-        
+
+
         // 🛑 SECURITY FIX 4: Filter sensitive data (password hash) before sending response.
         const responseData = isUserPresent.toObject(); // Convert Mongoose document to plain object
         delete responseData.password; // Remove the hash from the response
-        
+
         res.status(200).json({
             success: true,
             message: "User logged in successfully!",
@@ -303,7 +312,7 @@ const login = async (req, res, next) => {
             // It's already in the secure HttpOnly cookie.
             // If the frontend needs it for non-cookie auth headers, it can be kept, but remove it if possible.
             // Keeping it here for now, but best practice is to remove it if HttpOnly is used.
-            token: accessToken, 
+            token: accessToken,
             data: responseData // SEND CLEAN DATA
         });
     } catch (error) {
@@ -324,7 +333,7 @@ const getUserData = async (req, res, next) => {
             delete responseData.password;
             return res.status(200).json({ sucess: true, data: responseData });
         }
-        
+
         res.status(200).json({ sucess: true, data: user });
 
     } catch (error) {
@@ -333,13 +342,21 @@ const getUserData = async (req, res, next) => {
 }
 
 
-const logout = async(req, res, next) => {
+const logout = async (req, res, next) => {
     try {
-        res.clearCookie('accessToken', {
+        // res.clearCookie('accessToken', {
+        //     httpOnly: true,
+        //     sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
+        //     secure: process.env.NODE_ENV === 'production',
+        // });
+// change this for iphone login issue 
+        res.clearCookie("accessToken", {
             httpOnly: true,
-            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax', 
-            secure: process.env.NODE_ENV === 'production', 
+            secure: true,
+            sameSite: "None",
+            domain: ".onrender.com",
         });
+
         res.status(200).json({ success: true, message: "User logged out successfully" });
     } catch (error) {
         next(error);
@@ -351,7 +368,7 @@ const logout = async(req, res, next) => {
 const verifyAdminPasswordController = async (req, res, next) => {
     try {
         const { password } = req.body;
-        
+
         if (!password) {
             return next(createHttpError(400, "Admin password required."));
         }
