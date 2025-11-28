@@ -93,7 +93,8 @@ app.use(cors({
   credentials: true,
   origin: [
     "http://localhost:5173",
-    "https://pos-frontend-bahrain.onrender.com"
+    "https://pos-frontend-bahrain.onrender.com",
+    "https://al-sayeda.hasnova.com"
   ],
 }));
 app.use(express.json());
