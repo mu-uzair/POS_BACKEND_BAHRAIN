@@ -131,6 +131,12 @@ app.use("/api/metrics", require("./routes/Inventory/metricsroute"));
 
 app.use('/api/recipeTransactions', require('./routes/Inventory/recipeTransactionRoutes'));
 
+// ANALYTICS ROUTES
+app.use("/api/analytics", require("./routes/analyticsRoutes"));
+
+// OPTIMIZED ORDER ROUTES
+app.use("/api/optimized-orders", require("./routes/optimizedOrderRoute"));
+
 app.get("/", (req, res) => {
   res.send("✅ POS Backend is running!");
 });
