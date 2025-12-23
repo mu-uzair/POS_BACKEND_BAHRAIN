@@ -3,6 +3,7 @@
 // ============================================
 
 const orderModel = require("../models/orderModel");
+const tableModel = require("../models/tableModel"); // Add this line
 
 // ============================================
 // 3. PAGINATED ORDERS (WITH FILTERS)
@@ -279,60 +280,6 @@ exports.getPaymentTotals = async (req, res) => {
   }
 };
 
-// ============================================
-// 6. POPULAR DISHES
-// ============================================
-// exports.getPopularDishes = async (req, res) => {
-//   try {
-//     const { limit = 10, dateRange = 30 } = req.query;
-
-//     const startDate = new Date();
-//     startDate.setDate(startDate.getDate() - parseInt(dateRange));
-
-//     const popularDishes = await orderModel.aggregate([
-//       {
-//         $match: {
-//           createdAt: { $gte: startDate },
-//           orderStatus: 'Completed'
-//         }
-//       },
-//       { $unwind: '$items' },
-//       {
-//         $group: {
-//           _id: '$items.name',
-//           totalOrders: { $sum: 1 },
-//           totalQuantity: { $sum: '$items.quantity' },
-//           totalRevenue: {
-//             $sum: { $multiply: ['$items.quantity', '$items.price'] }
-//           }
-//         }
-//       },
-//       { $sort: { totalQuantity: -1 } },
-//       { $limit: parseInt(limit) },
-//       {
-//         $project: {
-//           _id: 0,
-//           name: '$_id',
-//           totalOrders: 1,
-//           totalQuantity: 1,
-//           totalRevenue: { $round: ['$totalRevenue', 3] }
-//         }
-//       }
-//     ]);
-
-//     res.json({
-//       success: true,
-//       data: popularDishes
-//     });
-//   } catch (error) {
-//     console.error('Error fetching popular dishes:', error);
-//     res.status(500).json({
-//       success: false,
-//       message: 'Failed to fetch popular dishes',
-//       error: error.message
-//     });
-//   }
-// };
 exports.getPopularDishes = async (req, res) => {
   
   try {
@@ -405,6 +352,8 @@ exports.getPopularDishes = async (req, res) => {
   }
 };
 
+
+
 exports.completeAllOrders = async (req, res) => {
   console.log("✅ completeAllOrders route hit");
   try {
@@ -413,31 +362,231 @@ exports.completeAllOrders = async (req, res) => {
       orderStatus: { $nin: ['Completed', 'Cancelled'] }
     };
 
-    // Optional: you can filter by date, table, etc.
-    // const { dateFilter } = req.body;
-    // Apply date filters here if needed
+    // ✅ Get all orders that will be completed (to extract table info)
+    const ordersToComplete = await orderModel.find(filter);
+
+    console.log("📋 Orders to complete:", ordersToComplete.length);
 
     // ✅ Update all matching orders to 'Completed'
     const result = await orderModel.updateMany(filter, {
       $set: { orderStatus: 'Completed', completedAt: new Date() }
     });
 
-    // result.nModified gives how many orders were updated
+    // ✅ Mark tables as available for dine-in orders
+    const dineInOrders = ordersToComplete.filter(order => {
+      const orderType = order.customerDetails?.orderType || order.orderType;
+      const tableId = order.table || order.tableId;
+      
+      return orderType === 'Dine-in' && tableId;
+    });
+
+    console.log(`✅ Found ${dineInOrders.length} dine-in orders with tables`);
+
+    if (dineInOrders.length > 0) {
+      // Extract table IDs
+      const tableIds = dineInOrders
+        .map(order => order.table || order.tableId)
+        .filter(id => id);
+      
+      console.log("📋 Table IDs to update:", tableIds);
+
+      if (tableIds.length > 0) {
+        // Update tables to available status
+        const tableUpdateResult = await tableModel.updateMany(
+          { _id: { $in: tableIds } },
+          { $set: { status: 'Available', orderId: null } }
+        );
+        
+        console.log(`✅ ${tableUpdateResult.modifiedCount} tables updated to Available`);
+      }
+    }
+
     res.json({
       success: true,
       message: `${result.modifiedCount} orders marked as Completed`,
-      modifiedCount: result.modifiedCount
+      modifiedCount: result.modifiedCount,
+      tablesFreed: dineInOrders.length
     });
 
     // ✅ Trigger socket update (if using Socket.io)
     if (req.io) {
       req.io.emit('ordersUpdated', { action: 'completeAll' });
+      if (dineInOrders.length > 0) {
+        req.io.emit('tablesUpdated', { action: 'tablesFreed' });
+      }
     }
   } catch (error) {
     console.error('Error completing all orders:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to complete all orders',
+      error: error.message
+    });
+  }
+};
+
+
+
+// // ============================================
+// // 6. SALES REPORT (FOR EXCEL EXPORT)
+// // ============================================
+// exports.getSalesReport = async (req, res) => {
+//   console.log("✅ getSalesReport route hit");
+//   try {
+//     const { startDate, endDate } = req.query;
+
+//     if (!startDate || !endDate) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Start date and end date are required'
+//       });
+//     }
+
+//     // ✅ BUILD FILTER FOR COMPLETED ORDERS ONLY
+//     const filter = {
+//       orderStatus: 'Completed',
+//       createdAt: {
+//         $gte: new Date(startDate),
+//         $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999))
+//       }
+//     };
+
+//     // ✅ FETCH COMPLETED ORDERS
+//     const orders = await orderModel.find(filter)
+//       .sort({ createdAt: -1 })
+//       .select('orderId createdAt bills paymentMethod customerDetails')
+//       .lean();
+
+//     // ✅ CALCULATE TOTALS
+//     let totalGross = 0;
+//     let totalVAT = 0;
+//     let totalNet = 0;
+
+//     const formattedOrders = orders.map(order => {
+//       const grossAmount = order.bills?.totalWithoutTax || 0;
+//       const vatAmount = order.bills?.taxAmount || 0;
+//       const netAmount = order.bills?.totalWithTax || 0;
+
+//       totalGross += grossAmount;
+//       totalVAT += vatAmount;
+//       totalNet += netAmount;
+
+//       return {
+//         orderId: order.orderId,
+//         createdAt: order.createdAt,
+//         grossAmount: parseFloat(grossAmount.toFixed(3)),
+//         vatAmount: parseFloat(vatAmount.toFixed(3)),
+//         netAmount: parseFloat(netAmount.toFixed(3)),
+//         paymentMethod: order.paymentMethod || 'Cash',
+//         orderType: order.customerDetails?.orderType || 'N/A'
+//       };
+//     });
+
+//     res.json({
+//       success: true,
+//       data: {
+//         orders: formattedOrders,
+//         summary: {
+//           totalOrders: orders.length,
+//           totalGross: parseFloat(totalGross.toFixed(3)),
+//           totalVAT: parseFloat(totalVAT.toFixed(3)),
+//           totalNet: parseFloat(totalNet.toFixed(3))
+//         }
+//       }
+//     });
+//   } catch (error) {
+//     console.error('Error fetching sales report:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to fetch sales report',
+//       error: error.message
+//     });
+//   }
+// };
+
+// ============================================
+// 6. SALES REPORT (FOR EXCEL EXPORT)
+// ============================================
+exports.getSalesReport = async (req, res) => {
+  console.log("✅ getSalesReport route hit");
+  
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Start date and end date are required'
+      });
+    }
+
+    // ✅ BUILD FILTER FOR COMPLETED ORDERS ONLY
+    const filter = {
+      orderStatus: 'Completed',
+      createdAt: {
+        $gte: new Date(startDate),
+        $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999))
+      }
+    };
+
+    // ✅ FETCH COMPLETED ORDERS
+    const orders = await orderModel.find(filter)
+      .sort({ createdAt: -1 })
+      .select('orderId createdAt bills paymentMethod customerDetails')
+      .lean();
+
+    console.log(`📊 Found ${orders.length} orders`);
+
+    // ✅ CALCULATE TOTALS
+    let totalGross = 0;
+    let totalVAT = 0;
+    let totalNet = 0;
+
+    const formattedOrders = orders.map(order => {
+      // ✅ FIXED: Use correct field names from your database
+      const grossAmount = order.bills?.total || 0;           // Changed from totalWithoutTax
+      const vatAmount = order.bills?.tax || 0;               // Changed from taxAmount
+      const netAmount = order.bills?.totalWithTax || 0;      // This was already correct
+
+      totalGross += grossAmount;
+      totalVAT += vatAmount;
+      totalNet += netAmount;
+
+      return {
+        orderId: order.orderId,
+        createdAt: order.createdAt,
+        grossAmount: parseFloat(grossAmount.toFixed(3)),
+        vatAmount: parseFloat(vatAmount.toFixed(3)),
+        netAmount: parseFloat(netAmount.toFixed(3)),
+        paymentMethod: order.paymentMethod || 'Cash',
+        orderType: order.customerDetails?.orderType || 'N/A'
+      };
+    });
+
+    console.log("✅ Summary:", {
+      totalOrders: orders.length,
+      totalGross,
+      totalVAT,
+      totalNet
+    });
+
+    res.json({
+      success: true,
+      data: {
+        orders: formattedOrders,
+        summary: {
+          totalOrders: orders.length,
+          totalGross: parseFloat(totalGross.toFixed(3)),
+          totalVAT: parseFloat(totalVAT.toFixed(3)),
+          totalNet: parseFloat(totalNet.toFixed(3))
+        }
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error fetching sales report:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch sales report',
       error: error.message
     });
   }

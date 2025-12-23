@@ -106,6 +106,9 @@ app.use((req, res, next) => {
   next();
 });
 
+
+
+
 // routes (keep your existing routes)
 app.use("/api/user", require("./routes/userRoute"));
 app.use("/api/order", require("./routes/orderRoute"));
@@ -113,7 +116,7 @@ app.use("/api/table", require("./routes/tableRoutes"));
 app.use("/api/category", require("./routes/categoryRoute"));
 app.use("/api/dish", require("./routes/dishRoute"));
 
-
+app.use("/api/health", require("./routes/healthroute"));
 // ⚡️ NEW DELIVERY & CUSTOMER ROUTES
 app.use("/api/deliveryboy", require("./routes/deliveryBoyRoutes"));
 app.use("/api/customers", require("./routes/customerRoutes"));
